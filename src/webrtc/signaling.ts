@@ -50,22 +50,21 @@ export interface Participant {
 
 export type ParticipantUpdateCallback = (participants: Participant[]) => void;
 export type RoomUpdateCallback = (room: RoomData | null) => void;
+export type SignalingCallback = (data: SignalingData) => void;
 
 export interface SignalingData {
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
-  iceCandidates?: RTCIceCandidateInit[];
+  iceCandidates: RTCIceCandidateInit[];
+  timestamp: any;
 }
-
-export type SignalingCallback = (fromId: string, data: SignalingData) => void;
 
 class SignalingService {
   private currentRoom: RoomData | null = null;
   private participants: Participant[] = [];
   private onParticipantsCallback: ParticipantUpdateCallback | null = null;
   private onRoomCallback: RoomUpdateCallback | null = null;
-  private signalingCallback: SignalingCallback | null = null;
-  private signalingUnsubscribe: (() => void) | null = null;
+  private unsubscribeCallbacks: (() => void)[] = [];
 
   /**
    * Create a new room
@@ -73,9 +72,6 @@ class SignalingService {
   async createRoom(name: string, settings: RoomData['settings']): Promise<RoomData> {
     try {
       console.log('🏠 Creating room:', name);
-      
-      // Generate room ID
-      const roomId = this.generateRoomId();
       
       // Ensure user is authenticated
       if (!authService.isAuthenticated()) {
@@ -89,7 +85,9 @@ class SignalingService {
         throw new Error('User not authenticated');
       }
 
-      console.log('👤 User ID:', userId);
+      // Generate room ID
+      const roomId = this.generateRoomId();
+      console.log('👤 User ID:', userId, 'Room ID:', roomId);
 
       const roomData: RoomData = {
         id: roomId,
@@ -104,12 +102,15 @@ class SignalingService {
 
       // Create room document in Firebase
       console.log('📝 Saving room to Firebase...');
+      console.log('📝 Room data to save:', roomData);
       const roomRef = doc(db, 'rooms', roomId);
       await setDoc(roomRef, roomData as any);
+      console.log('✅ Room document saved to Firebase');
 
       // Add host as first participant
       console.log('👑 Adding host as first participant...');
       await this.addParticipant(roomId, userId, 'You', true);
+      console.log('✅ Host added as participant');
 
       this.currentRoom = roomData;
       this.notifyRoomUpdate();
@@ -262,17 +263,21 @@ class SignalingService {
    * Subscribe to room updates
    */
   onRoomUpdate(roomId: string, callback: RoomUpdateCallback): () => void {
+    console.log('📡 Setting up room update listener for room:', roomId);
     const roomRef = doc(db, 'rooms', roomId);
     
     const unsubscribe = onSnapshot(roomRef, 
       (doc) => {
         try {
+          console.log('📡 Room update received for room:', roomId, 'exists:', doc.exists());
           if (doc.exists()) {
             const roomData = { ...doc.data(), id: doc.id } as RoomData;
+            console.log('📡 Room data:', roomData);
             this.currentRoom = roomData;
             this.onRoomCallback = callback;
             callback(roomData);
           } else {
+            console.log('❌ Room document does not exist, calling callback with null');
             callback(null);
           }
         } catch (error) {
@@ -363,101 +368,96 @@ class SignalingService {
   }
 
   /**
-   * Listen for all signaling data (WebRTC offers, answers, ICE candidates)
+   * Send WebRTC offer
    */
-  onAllSignaling(roomId: string, currentUserId: string, callback: SignalingCallback): () => void {
-    console.log('📡 Setting up signaling listener for room:', roomId);
-    
-    // Cleanup any existing signaling listener
-    if (this.signalingUnsubscribe) {
-      this.signalingUnsubscribe();
-    }
-    
-    this.signalingCallback = callback;
-    
-    const signalingRef = collection(db, 'rooms', roomId, 'signaling');
-    this.signalingUnsubscribe = onSnapshot(signalingRef, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added' || change.type === 'modified') {
-          const data = change.doc.data();
-          
-          // Skip messages from the current user
-          if (data.fromId === currentUserId) {
-            return;
-          }
-          
-          // Convert Firestore format to WebRTC format
-          const signalingData: SignalingData = {};
-          
-          if (data.offer) {
-            signalingData.offer = {
-              type: data.offer.type,
-              sdp: data.offer.sdp
-            } as RTCSessionDescriptionInit;
-          }
-          
-          if (data.answer) {
-            signalingData.answer = {
-              type: data.answer.type,
-              sdp: data.answer.sdp
-            } as RTCSessionDescriptionInit;
-          }
-          
-          if (data.iceCandidates && Array.isArray(data.iceCandidates)) {
-            signalingData.iceCandidates = data.iceCandidates.map((candidate: any) => ({
-              candidate: candidate.candidate,
-              sdpMLineIndex: candidate.sdpMLineIndex,
-              sdpMid: candidate.sdpMid
-            }));
-          }
-          
-          console.log('📡 Received signaling data from:', data.fromId, signalingData);
-          callback(data.fromId, signalingData);
-        }
+  async sendOffer(roomId: string, fromId: string, toId: string, offer: RTCSessionDescriptionInit): Promise<void> {
+    try {
+      console.log('📤 Sending offer from', fromId, 'to', toId, 'in room', roomId);
+      const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
+      await setDoc(signalingRef, {
+        offer,
+        iceCandidates: [],
+        timestamp: serverTimestamp()
       });
-    }, (error) => {
-      console.error('❌ Error in signaling subscription:', error);
-    });
-    
-    // Return cleanup function
-    return () => {
-      if (this.signalingUnsubscribe) {
-        this.signalingUnsubscribe();
-        this.signalingUnsubscribe = null;
-      }
-      this.signalingCallback = null;
-      console.log('📡 Signaling listener cleanup completed');
-    };
+      console.log('✅ Offer sent successfully');
+    } catch (error) {
+      console.error('❌ Failed to send offer:', error);
+      throw error;
+    }
   }
 
   /**
-   * Send signaling data to a specific participant
+   * Send WebRTC answer
    */
-  async sendSignaling(roomId: string, toId: string, data: SignalingData): Promise<void> {
+  async sendAnswer(roomId: string, fromId: string, toId: string, answer: RTCSessionDescriptionInit): Promise<void> {
     try {
-      const currentUserId = authService.getCurrentUserId();
-      if (!currentUserId) {
-        throw new Error('Not authenticated');
-      }
-      
-      console.log('📤 Sending signaling to:', toId, data);
-      
-      const signalingDoc = doc(db, 'rooms', roomId, 'signaling', `${currentUserId}_${toId}_${Date.now()}`);
-      
-      const signalingData = {
-        fromId: currentUserId,
-        toId,
-        ...data,
+      console.log('📥 Sending answer from', fromId, 'to', toId, 'in room', roomId);
+      const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
+      await updateDoc(signalingRef, {
+        answer,
         timestamp: serverTimestamp()
-      };
-      
-      await setDoc(signalingDoc, signalingData);
-      console.log('📤 Signaling data sent successfully');
-      
+      });
+      console.log('✅ Answer sent successfully');
     } catch (error) {
-      console.error('❌ Failed to send signaling:', error);
+      console.error('❌ Failed to send answer:', error);
       throw error;
     }
+  }
+
+  /**
+   * Send ICE candidate
+   */
+  async sendIceCandidate(roomId: string, fromId: string, toId: string, candidate: RTCIceCandidateInit): Promise<void> {
+    try {
+      console.log('🧊 Sending ICE candidate from', fromId, 'to', toId, 'in room', roomId);
+      const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
+      await updateDoc(signalingRef, {
+        iceCandidates: arrayUnion(candidate),
+        timestamp: serverTimestamp()
+      });
+      console.log('✅ ICE candidate sent successfully');
+    } catch (error) {
+      console.error('❌ Failed to send ICE candidate:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Listen for all signaling data for a specific user
+   */
+  onAllSignaling(roomId: string, userId: string, callback: (fromId: string, data: SignalingData) => void): () => void {
+    console.log('📡 Setting up signaling listener for user:', userId, 'in room:', roomId);
+    const signalingRef = collection(db, 'rooms', roomId, 'signaling');
+    
+    const unsubscribe = onSnapshot(signalingRef, 
+      (snapshot) => {
+        try {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === 'added' || change.type === 'modified') {
+              const docId = change.doc.id;
+              // Check if this document is targeting our user (format: fromId_toId)
+              if (docId.endsWith(`_${userId}`)) {
+                const fromId = docId.split('_')[0];
+                if (fromId !== userId) {
+                  const data = change.doc.data() as SignalingData;
+                  console.log('📥 Received signaling data from:', fromId, 'to:', userId);
+                  callback(fromId, data);
+                }
+              }
+            }
+          });
+        } catch (error) {
+          console.error('Error processing all signaling data:', error);
+        }
+      },
+      (error) => {
+        console.error('Error in all signaling subscription:', error);
+      }
+    );
+
+    this.unsubscribeCallbacks.push(unsubscribe);
+    console.log('✅ Signaling listener set up successfully');
+    return unsubscribe;
   }
 }
 

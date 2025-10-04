@@ -7,7 +7,7 @@ import { Switch } from './ui/switch';
 import { QRCodeDisplay } from './QRCodeDisplay';
 import { ArrowLeft, Copy, Users, Settings, Share2, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { roomStorage } from '../services/roomStorage';
+import { signaling } from '../webrtc/signaling';
 
 interface CreateRoomProps {
   onBack: () => void;
@@ -21,36 +21,35 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
   const [transcription, setTranscription] = useState(true);
   const [roomCreated, setRoomCreated] = useState(false);
   const [roomData, setRoomData] = useState<any>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const generateRoomId = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
   };
 
-  const createRoom = () => {
+  const createRoom = async () => {
     if (!roomName.trim()) {
       toast.error('Please enter a room name');
       return;
     }
 
-    const roomId = generateRoomId();
-    const newRoomData = {
-      id: roomId,
-      name: roomName,
-      settings: {
+    setIsCreating(true);
+    try {
+      const newRoomData = await signaling.createRoom(roomName, {
         pushToTalk,
         presenterMode,
         transcription
-      },
-      host: true,
-      url: `${window.location.origin}?room=${roomId}`
-    };
-
-    // Store the room in our storage
-    roomStorage.createRoom(newRoomData);
-    
-    setRoomData(newRoomData);
-    setRoomCreated(true);
-    toast.success('Room created! Share the QR code to invite others.');
+      });
+      
+      setRoomData(newRoomData);
+      setRoomCreated(true);
+      toast.success('Room created! Share the QR code to invite others.');
+    } catch (error) {
+      console.error('Failed to create room:', error);
+      toast.error('Failed to create room. Please try again.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const copyRoomLink = () => {
@@ -240,9 +239,9 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
             onClick={createRoom} 
             className="w-full h-14 text-lg rounded-2xl shadow-md" 
             size="lg"
-            disabled={!roomName.trim()}
+            disabled={!roomName.trim() || isCreating}
           >
-            Create Audio Bubble
+            {isCreating ? 'Creating...' : 'Create Audio Bubble'}
           </Button>
         </div>
       </div>
