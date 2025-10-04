@@ -58,8 +58,15 @@ export const MEDIA_CONSTRAINTS: MediaStreamConstraints = {
     noiseSuppression: true,
     autoGainControl: true,
     sampleRate: 48000,
-    channelCount: 1
-  }
+    channelCount: 1,
+    // Enhanced voice isolation features (Google-specific)
+    googEchoCancellation: true,        // Google's advanced echo cancellation
+    googAutoGainControl: true,         // Google's auto gain control
+    googNoiseSuppression: true,        // Google's noise suppression
+    googHighpassFilter: true,          // High-pass filter for voice clarity
+    googTypingNoiseDetection: true,    // Detect and reduce typing noise
+    googAudioMirroring: false          // Disable audio mirroring for better isolation
+  } as any
 };
 
 // Fallback configuration with only the most reliable servers
