@@ -66,7 +66,7 @@ export function HomePage({
               className="w-full h-16 text-lg rounded-2xl 
                         bg-blue-600 hover:bg-blue-700 
                         text-white shadow-lg hover:shadow-xl 
-                        transform hover:scale-105 transition-all duration-200"
+                        transform hover:scale-105 transition-all duration-200 cursor-pointer"
               aria-label="Join an existing audio bubble with QR code"
             >
               <div className="flex items-center justify-center space-x-3">
@@ -83,7 +83,7 @@ export function HomePage({
               className="w-full h-16 text-lg rounded-2xl 
                         bg-blue-600 hover:bg-blue-700 
                         text-white shadow-lg hover:shadow-xl 
-                        transform hover:scale-105 transition-all duration-200"
+                        transform hover:scale-105 transition-all duration-200 cursor-pointer"
               aria-label="Join an existing audio bubble with QR code"
             >
               <div className="flex items-center justify-center space-x-3">
