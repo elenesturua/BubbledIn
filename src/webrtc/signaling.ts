@@ -51,11 +51,21 @@ export interface Participant {
 export type ParticipantUpdateCallback = (participants: Participant[]) => void;
 export type RoomUpdateCallback = (room: RoomData | null) => void;
 
+export interface SignalingData {
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+  iceCandidates?: RTCIceCandidateInit[];
+}
+
+export type SignalingCallback = (fromId: string, data: SignalingData) => void;
+
 class SignalingService {
   private currentRoom: RoomData | null = null;
   private participants: Participant[] = [];
   private onParticipantsCallback: ParticipantUpdateCallback | null = null;
   private onRoomCallback: RoomUpdateCallback | null = null;
+  private signalingCallback: SignalingCallback | null = null;
+  private signalingUnsubscribe: (() => void) | null = null;
 
   /**
    * Create a new room
@@ -349,6 +359,104 @@ class SignalingService {
   private notifyRoomUpdate(): void {
     if (this.onRoomCallback && this.currentRoom) {
       this.onRoomCallback(this.currentRoom);
+    }
+  }
+
+  /**
+   * Listen for all signaling data (WebRTC offers, answers, ICE candidates)
+   */
+  onAllSignaling(roomId: string, currentUserId: string, callback: SignalingCallback): () => void {
+    console.log('📡 Setting up signaling listener for room:', roomId);
+    
+    // Cleanup any existing signaling listener
+    if (this.signalingUnsubscribe) {
+      this.signalingUnsubscribe();
+    }
+    
+    this.signalingCallback = callback;
+    
+    const signalingRef = collection(db, 'rooms', roomId, 'signaling');
+    this.signalingUnsubscribe = onSnapshot(signalingRef, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          const data = change.doc.data();
+          
+          // Skip messages from the current user
+          if (data.fromId === currentUserId) {
+            return;
+          }
+          
+          // Convert Firestore format to WebRTC format
+          const signalingData: SignalingData = {};
+          
+          if (data.offer) {
+            signalingData.offer = {
+              type: data.offer.type,
+              sdp: data.offer.sdp
+            } as RTCSessionDescriptionInit;
+          }
+          
+          if (data.answer) {
+            signalingData.answer = {
+              type: data.answer.type,
+              sdp: data.answer.sdp
+            } as RTCSessionDescriptionInit;
+          }
+          
+          if (data.iceCandidates && Array.isArray(data.iceCandidates)) {
+            signalingData.iceCandidates = data.iceCandidates.map((candidate: any) => ({
+              candidate: candidate.candidate,
+              sdpMLineIndex: candidate.sdpMLineIndex,
+              sdpMid: candidate.sdpMid
+            }));
+          }
+          
+          console.log('📡 Received signaling data from:', data.fromId, signalingData);
+          callback(data.fromId, signalingData);
+        }
+      });
+    }, (error) => {
+      console.error('❌ Error in signaling subscription:', error);
+    });
+    
+    // Return cleanup function
+    return () => {
+      if (this.signalingUnsubscribe) {
+        this.signalingUnsubscribe();
+        this.signalingUnsubscribe = null;
+      }
+      this.signalingCallback = null;
+      console.log('📡 Signaling listener cleanup completed');
+    };
+  }
+
+  /**
+   * Send signaling data to a specific participant
+   */
+  async sendSignaling(roomId: string, toId: string, data: SignalingData): Promise<void> {
+    try {
+      const currentUserId = authService.getCurrentUserId();
+      if (!currentUserId) {
+        throw new Error('Not authenticated');
+      }
+      
+      console.log('📤 Sending signaling to:', toId, data);
+      
+      const signalingDoc = doc(db, 'rooms', roomId, 'signaling', `${currentUserId}_${toId}_${Date.now()}`);
+      
+      const signalingData = {
+        fromId: currentUserId,
+        toId,
+        ...data,
+        timestamp: serverTimestamp()
+      };
+      
+      await setDoc(signalingDoc, signalingData);
+      console.log('📤 Signaling data sent successfully');
+      
+    } catch (error) {
+      console.error('❌ Failed to send signaling:', error);
+      throw error;
     }
   }
 }

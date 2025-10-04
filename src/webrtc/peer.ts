@@ -134,7 +134,7 @@ class PeerManager {
     
     // Send offer through signaling
     console.log('📡 Sending offer to participant:', participantId);
-    await signaling.sendOffer(this.currentRoomId, this.currentUserId, participantId, offer);
+    await signaling.sendSignaling(this.currentRoomId, participantId, { offer });
     console.log('✅ Offer sent successfully to:', participantId);
   }
 
@@ -163,7 +163,7 @@ class PeerManager {
     
     // Send answer through signaling
     console.log('📡 Sending answer to participant:', fromId);
-    await signaling.sendAnswer(this.currentRoomId, this.currentUserId, fromId, answer);
+    await signaling.sendSignaling(this.currentRoomId, fromId, { answer });
     console.log('✅ Answer sent successfully to:', fromId);
   }
 
@@ -509,7 +509,7 @@ class PeerManager {
       if (event.candidate && this.currentRoomId && this.currentUserId) {
         console.log('🧊 Generated ICE candidate for participant:', participantId);
         try {
-          await signaling.sendIceCandidate(this.currentRoomId, this.currentUserId, participantId, event.candidate);
+          await signaling.sendSignaling(this.currentRoomId, participantId, { iceCandidates: [event.candidate] });
           console.log('📡 ICE candidate sent to participant:', participantId);
         } catch (error) {
           console.error('❌ Failed to send ICE candidate to participant:', participantId, error);
