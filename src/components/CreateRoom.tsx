@@ -1,16 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Switch } from './ui/switch';
 import { QRCodeDisplay } from './QRCodeDisplay';
-import { ArrowLeft, Copy, Share2, Check } from 'lucide-react';
+import { ArrowLeft, Copy, Users, Settings, Share2, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { signaling, type RoomData } from '../webrtc';
+import { roomStorage } from '../services/roomStorage';
 
 interface CreateRoomProps {
   onBack: () => void;
-  onRoomCreated: (roomData: RoomData) => void;
+  onRoomCreated: (roomData: any) => void;
 }
 
 export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
@@ -19,43 +20,48 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
   const [presenterMode, setPresenterMode] = useState(false);
   const [transcription, setTranscription] = useState(true);
   const [roomCreated, setRoomCreated] = useState(false);
-  const [roomData, setRoomData] = useState<RoomData | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
+  const [roomData, setRoomData] = useState<any>(null);
 
-  const createRoom = async () => {
+  const generateRoomId = () => {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+  };
+
+  const createRoom = () => {
     if (!roomName.trim()) {
       toast.error('Please enter a room name');
       return;
     }
 
-    setIsCreating(true);
-    
-    try {
-      const newRoomData = await signaling.createRoom(roomName, {
+    const roomId = generateRoomId();
+    const newRoomData = {
+      id: roomId,
+      name: roomName,
+      settings: {
         pushToTalk,
         presenterMode,
         transcription
-      });
+      },
+      host: true,
+      url: `${window.location.origin}?room=${roomId}`
+    };
 
-      setRoomData(newRoomData);
-      setRoomCreated(true);
-      
-      // Simulate room creation delay for UX
-      setTimeout(() => {
-        onRoomCreated(newRoomData);
-      }, 1000);
-    } catch (error) {
-      console.error('Failed to create room:', error);
-      toast.error('Failed to create room. Please try again.');
-    } finally {
-      setIsCreating(false);
+    // Store the room in our storage
+    roomStorage.createRoom(newRoomData);
+    
+    setRoomData(newRoomData);
+    setRoomCreated(true);
+    toast.success('Room created! Share the QR code to invite others.');
+  };
+
+  const copyRoomLink = () => {
+    if (roomData) {
+      navigator.clipboard.writeText(roomData.url);
+      toast.success('Room link copied!');
     }
   };
 
   const shareRoom = async () => {
-    if (!roomData) return;
-    
-    if (navigator.share) {
+    if (roomData && navigator.share) {
       try {
         await navigator.share({
           title: `Join ${roomData.name}`,
@@ -63,12 +69,10 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
           url: roomData.url
         });
       } catch (error) {
-        navigator.clipboard.writeText(roomData.url);
-        toast.success('Room link copied!');
+        copyRoomLink();
       }
     } else {
-      navigator.clipboard.writeText(roomData.url);
-      toast.success('Room link copied!');
+      copyRoomLink();
     }
   };
 
@@ -78,8 +82,8 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
         <div className="px-4 py-6 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between pt-4">
-            <Button onClick={onBack} variant="ghost" size="sm" className="p-2">
-              <ArrowLeft className="h-5 w-5" />
+            <Button onClick={onBack} variant="ghost" size="sm" className="p-2 hover:bg-blue-50">
+              <ArrowLeft className="h-5 w-5 text-gray-700" />
             </Button>
             <h1 className="text-xl font-semibold">Bubble Created!</h1>
             <div className="w-9" />
@@ -117,12 +121,7 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
             </Button>
             
             <Button 
-              onClick={() => {
-                if (roomData) {
-                  navigator.clipboard.writeText(roomData.url);
-                  toast.success('Room link copied!');
-                }
-              }} 
+              onClick={copyRoomLink} 
               variant="outline" 
               className="w-full h-12 rounded-2xl border-2"
               size="lg"
@@ -157,14 +156,24 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
             </div>
           </div>
 
-          {/* Enter Button */}
-          <Button 
-            onClick={() => onRoomCreated(roomData)} 
-            className="w-full h-14 text-lg rounded-2xl shadow-md"
-            size="lg"
-          >
-            Enter Audio Bubble
-          </Button>
+          <div className="space-y-3">
+            <Button 
+              onClick={() => onRoomCreated(roomData)} 
+              className="w-full h-14 text-lg rounded-2xl shadow-md"
+              size="lg"
+            >
+              Enter Audio Bubble
+            </Button>
+            
+            <Button 
+              onClick={onBack}
+              variant="outline" 
+              className="w-full h-12 rounded-2xl border-2"
+              size="lg"
+            >
+              Back to Create New Room
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -175,8 +184,8 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
       <div className="px-4 py-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between pt-4">
-          <Button onClick={onBack} variant="ghost" size="sm" className="p-2">
-            <ArrowLeft className="h-5 w-5" />
+          <Button onClick={onBack} variant="ghost" size="sm" className="p-2 hover:bg-blue-50">
+            <ArrowLeft className="h-5 w-5 text-gray-700" />
           </Button>
           <h1 className="text-xl font-semibold">Create Bubble</h1>
           <div className="w-9" />
@@ -231,9 +240,9 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
             onClick={createRoom} 
             className="w-full h-14 text-lg rounded-2xl shadow-md" 
             size="lg"
-            disabled={!roomName.trim() || isCreating}
+            disabled={!roomName.trim()}
           >
-            {isCreating ? 'Creating...' : 'Create Audio Bubble'}
+            Create Audio Bubble
           </Button>
         </div>
       </div>

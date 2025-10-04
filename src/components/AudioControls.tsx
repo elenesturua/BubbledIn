@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
+import { WifiSignal } from './ui/wifi-signal';
 import { 
   Mic, 
   MicOff, 
@@ -13,7 +14,6 @@ import {
   KeyRound,
   Hand
 } from 'lucide-react';
-import { usePTT } from '../webrtc';
 
 interface AudioControlsProps {
   isMuted: boolean;
@@ -36,47 +36,34 @@ export function AudioControls({
   onPushToTalkToggle,
   onPresenterModeToggle
 }: AudioControlsProps) {
-  const [micLevel, setMicLevel] = useState(0);
+  const [isTouchPressed, setIsTouchPressed] = useState(false);
+  const [wifiStrength, setWifiStrength] = useState<'excellent' | 'good' | 'fair' | 'poor' | 'disconnected'>('good');
 
-  // Use PTT hook for keyboard and touch handling
-  const { isActive: isPTTActive, startPTT, stopPTT } = usePTT(
-    isPushToTalk,
-    () => {
-      // PTT start - unmute temporarily
-      if (isMuted) {
-        onMuteToggle();
-      }
-    },
-    () => {
-      // PTT end - mute if was originally muted
-      if (isMuted) {
-        onMuteToggle();
-      }
-    },
-    'Space'
-  );
-
-  // Simulate microphone input level
+  // Simulate WiFi strength variations
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!isMuted && (!isPushToTalk || isPTTActive)) {
-        setMicLevel(Math.random() * 100);
+      const strengths = ['excellent', 'good', 'fair', 'poor'] as const;
+      const randomStrength = strengths[Math.floor(Math.random() * strengths.length)];
+      // Occasionally simulate disconnection
+      if (Math.random() < 0.05) {
+        setWifiStrength('disconnected');
+        setTimeout(() => setWifiStrength('good'), 2000);
       } else {
-        setMicLevel(0);
+        setWifiStrength(randomStrength);
       }
-    }, 100);
+    }, 3000);
 
     return () => clearInterval(interval);
-  }, [isMuted, isPushToTalk, isPTTActive]);
+  }, []);
 
-  const isMicActive = !isMuted && (!isPushToTalk || isPTTActive);
+  const isMicActive = !isMuted && (!isPushToTalk || isTouchPressed);
 
   const handlePushToTalkStart = () => {
-    startPTT();
+    setIsTouchPressed(true);
   };
 
   const handlePushToTalkEnd = () => {
-    stopPTT();
+    setIsTouchPressed(false);
   };
 
   return (
@@ -96,16 +83,16 @@ export function AudioControls({
               onMouseUp={handlePushToTalkEnd}
               onMouseLeave={handlePushToTalkEnd}
               className={`w-24 h-24 rounded-full transition-all duration-150 flex items-center justify-center shadow-lg select-none focus-ring touch-target ${
-                isPTTActive 
+                isTouchPressed 
                   ? 'bg-green-600 text-white scale-110 shadow-xl' 
                   : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
               }`}
-              aria-label={isPTTActive ? 'Speaking - release to stop' : 'Push and hold to speak'}
-              aria-pressed={isPTTActive}
+              aria-label={isTouchPressed ? 'Speaking - release to stop' : 'Push and hold to speak'}
+              aria-pressed={isTouchPressed}
               role="button"
               aria-describedby="push-to-talk-desc"
             >
-              {isPTTActive ? (
+              {isTouchPressed ? (
                 <Mic className="h-10 w-10" aria-hidden="true" />
               ) : (
                 <Hand className="h-10 w-10" aria-hidden="true" />
@@ -130,13 +117,13 @@ export function AudioControls({
           <div className="text-center">
             <p className="font-medium" aria-live="polite">
               {isPushToTalk 
-                ? (isPTTActive ? 'Speaking' : 'Hold to Talk') 
+                ? (isTouchPressed ? 'Speaking' : 'Hold to Talk') 
                 : (isMuted ? 'Muted' : 'Live')
               }
             </p>
-            {isPushToTalk && !isPTTActive && (
+            {isPushToTalk && !isTouchPressed && (
               <p className="text-xs text-gray-500 mt-1" id="push-to-talk-desc">
-                Tap and hold button or press Spacebar to speak
+                Tap and hold button to speak
               </p>
             )}
             {!isPushToTalk && (
@@ -147,26 +134,12 @@ export function AudioControls({
           </div>
         </div>
 
-        {/* Mic Level Indicator */}
-        <div className="flex flex-col items-center space-y-2" role="img" aria-labelledby="mic-level-label">
-          <div 
-            className="h-24 w-4 bg-gray-200 rounded-full overflow-hidden"
-            aria-hidden="true"
-          >
-            <div 
-              className="w-full bg-gradient-to-t from-green-400 via-yellow-400 to-red-400 transition-all duration-100 ease-out rounded-full"
-              style={{ height: `${micLevel}%`, marginTop: 'auto' }}
-            />
-          </div>
-          <p className="text-xs text-gray-500 text-center" id="mic-level-label">
-            Input Level: {Math.round(micLevel)}%
+        {/* WiFi Signal Indicator */}
+        <div className="flex flex-col items-center space-y-2" role="img" aria-labelledby="wifi-label">
+          <WifiSignal strength={wifiStrength} />
+          <p className="text-xs text-gray-500 text-center" id="wifi-label">
+            Connection: {wifiStrength}
           </p>
-          <div className="sr-only" aria-live="polite">
-            {micLevel > 80 && 'High input level'}
-            {micLevel > 50 && micLevel <= 80 && 'Medium input level'}
-            {micLevel <= 50 && micLevel > 0 && 'Low input level'}
-            {micLevel === 0 && 'No input detected'}
-          </div>
         </div>
       </div>
 
