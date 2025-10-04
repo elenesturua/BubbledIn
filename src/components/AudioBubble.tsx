@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { AudioControls } from './AudioControls';
@@ -46,15 +46,29 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   // Refs to store unsubscribe functions
   const unsubscribeParticipantsRef = useRef<(() => void) | null>(null);
   const unsubscribeRoomRef = useRef<(() => void) | null>(null);
+  const participantsRef = useRef<Participant[]>([]);
   
   // Status announcer for accessibility
   const { message, announce, announceJoin, announceLeave, announceMute, announceConnect } = useStatusAnnouncer();
   
-  const vibrate = (pattern: number | number[]) => {
+  const vibrate = useCallback((pattern: number | number[]) => {
     if ('vibrate' in navigator) {
       navigator.vibrate(pattern);
     }
-  };
+  }, []);
+
+  // Update connection status based on participants and room state
+  useEffect(() => {
+    participantsRef.current = participants;
+    if (participants.length > 0) {
+      // If there are participants in the room, we're connected
+      setConnectionStatus('connected');
+      setIsConnected(true);
+    } else if (connectionStatus === 'connecting') {
+      // If we're still connecting and no participants yet, keep connecting status
+      // This will be updated when participants are loaded
+    }
+  }, [participants.length, connectionStatus]);
 
   useEffect(() => {
     // Initialize WebRTC connection AND Web Speech API
@@ -93,23 +107,31 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         console.log('🏠 Step 3: Initializing room for peer connections...');
         await peerManager.initializeRoom(roomData.id);
         
+        // Mark as connected since we've successfully joined the room
+        console.log('✅ Successfully joined room, updating connection status');
+        setConnectionStatus('connected');
+        setIsConnected(true);
+        announceConnect(true);
+        
         // Set up peer manager callbacks
         console.log('📞 Step 4: Setting up peer manager callbacks...');
         peerManager.setCallbacks({
           onConnectionStateChange: (state) => {
             console.log('🔄 WebRTC connection state changed to:', state);
             if (state === 'connected') {
-              console.log('✅ Connected to audio bubble');
-              setIsConnected(true);
-              setConnectionStatus('connected');
+              console.log('✅ WebRTC peer connection established');
+              // Don't override connection status here - it's managed by room participation
               announceConnect(true);
               vibrate([200, 100, 200]);
-              toast.success('Connected to audio bubble via WebRTC! Real-time transcription available.');
-            } else if (state === 'disconnected') {
-              console.log('❌ Disconnected from audio bubble');
-              setIsConnected(false);
-              setConnectionStatus('disconnected');
-              announceConnect(false);
+              toast.success('WebRTC peer connection established! Real-time audio available.');
+            } else if (state === 'disconnected' || state === 'failed') {
+              console.log('❌ WebRTC peer connection lost:', state);
+              // Only update to disconnected if we're not connected to the room
+              if (participantsRef.current.length === 0) {
+                setConnectionStatus('disconnected');
+                setIsConnected(false);
+                announceConnect(false);
+              }
             }
           },
           onParticipantJoined: (participantId) => {
@@ -130,46 +152,50 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         console.log('📡 Step 5: Subscribing to participant updates...');
         unsubscribeParticipantsRef.current = signaling.onParticipants(roomData.id, async (updatedParticipants) => {
           console.log('👥 Participants updated:', updatedParticipants.length, 'participants');
-          setParticipants(updatedParticipants);
           
-          // Handle participant changes
-          const currentParticipantIds = participants.map(p => p.id);
-          const newParticipantIds = updatedParticipants.map(p => p.id);
-          
-          // Find new participants
-          const newParticipants = updatedParticipants.filter(p => 
-            !currentParticipantIds.includes(p.id) && p.id !== authService.getCurrentUserId()
-          );
-          
-          // Find participants who left
-          const leftParticipants = participants.filter(p => 
-            !newParticipantIds.includes(p.id) && p.id !== authService.getCurrentUserId()
-          );
-          
-          // Connect to new participants
-          for (const participant of newParticipants) {
-            try {
-              await peerManager.handleNewParticipant(participant.id);
-              announceJoin(participant.name);
-            } catch (error) {
-              // Connection failed, continue with other participants
+          // Use functional update to get the current participants state
+          setParticipants(prevParticipants => {
+            // Handle participant changes
+            const currentParticipantIds = prevParticipants.map(p => p.id);
+            const newParticipantIds = updatedParticipants.map(p => p.id);
+            
+            // Find new participants
+            const newParticipants = updatedParticipants.filter(p => 
+              !currentParticipantIds.includes(p.id) && p.id !== authService.getCurrentUserId()
+            );
+            
+            // Find participants who left
+            const leftParticipants = prevParticipants.filter(p => 
+              !newParticipantIds.includes(p.id) && p.id !== authService.getCurrentUserId()
+            );
+            
+            // Connect to new participants
+            for (const participant of newParticipants) {
+              try {
+                peerManager.handleNewParticipant(participant.id);
+                announceJoin(participant.name);
+              } catch (error) {
+                // Connection failed, continue with other participants
+              }
             }
-          }
-          
-          // Remove connections for participants who left
-          for (const participant of leftParticipants) {
-            peerManager.handleParticipantLeft(participant.id);
-            announceLeave(participant.name);
-          }
-          
-          // Connect to all existing participants if this is the first time
-          if (participants.length === 0 && updatedParticipants.length > 1) {
-            try {
-              await peerManager.connectToAllParticipants(updatedParticipants);
-            } catch (error) {
-              // Connection failed, continue
+            
+            // Remove connections for participants who left
+            for (const participant of leftParticipants) {
+              peerManager.handleParticipantLeft(participant.id);
+              announceLeave(participant.name);
             }
-          }
+            
+            // Connect to all existing participants if this is the first time
+            if (prevParticipants.length === 0 && updatedParticipants.length > 1) {
+              try {
+                peerManager.connectToAllParticipants(updatedParticipants);
+              } catch (error) {
+                // Connection failed, continue
+              }
+            }
+            
+            return updatedParticipants;
+          });
         });
 
         // Subscribe to room updates
@@ -205,7 +231,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     };
 
     initializeConnection();
-  }, [roomData.name, roomData.id, announce, announceConnect, announceJoin, announceLeave, vibrate, onLeave]);
+  }, [roomData.id]); // Only depend on roomData.id, not the functions
 
   const shareRoom = async () => {
     const shareData = {
