@@ -156,7 +156,7 @@ export function AboutPage({ onBack }: AboutPageProps) {
                   Privacy Focused
                 </h3>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  Your audio bubbles are private and temporary.
+                  Your bubbles are private and temporary.
                   No data stored, no tracking, no accounts
                   required. Join, communicate, and disconnect.
                 </p>
@@ -284,7 +284,7 @@ export function AboutPage({ onBack }: AboutPageProps) {
                   Create or Join
                 </h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  Start a new audio bubble or scan a QR code to
+                  Start a new bubble or scan a QR code/enter a code to
                   join an existing one
                 </p>
               </div>
@@ -316,39 +316,6 @@ export function AboutPage({ onBack }: AboutPageProps) {
                   around you stays muted
                 </p>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Tech Stack */}
-        <section
-          aria-labelledby="tech-heading"
-          className="mt-12 pb-8"
-        >
-          <h2
-            id="tech-heading"
-            className="text-lg font-semibold text-gray-900 mb-4 px-2"
-          >
-            Technology
-          </h2>
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-600 leading-relaxed mb-3">
-              Built with modern web technologies for maximum
-              compatibility and performance:
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
-                WebRTC
-              </span>
-              <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
-                React
-              </span>
-              <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
-                Browser Audio API
-              </span>
-              <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
-                Real-time Transcription
-              </span>
             </div>
           </div>
         </section>

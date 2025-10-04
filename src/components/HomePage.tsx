@@ -1,7 +1,7 @@
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
-import { Waves, Info, QrCode, Users, Shield, Zap, Headphones, Mic } from "lucide-react";
+import { Waves, Info, QrCode, Users, Shield, Zap, Headphones, Mic, ArrowRight } from "lucide-react";
 import Logo from "./Logo";
 
 interface HomePageProps {
@@ -29,7 +29,7 @@ export function HomePage({
             {/* Title and Tagline */}
             <div className="space-y-4">
               <h1 className="text-xl md:text-8xl lg:text-9xl font-extrabold tracking-tight leading-tight text-blue-700" style={{ fontFamily: "'Poppins', system-ui, sans-serif" }}>
-                bubbledin
+                BubbledIn
               </h1>
               <p className="text-xl text-gray-700 max-w-lg mx-auto leading-relaxed">
                 Create private audio spaces in noisy environments.
@@ -51,46 +51,63 @@ export function HomePage({
 
           {/* Main Action Buttons */}
           <section
-            className="w-full max-w-sm space-y-4 mb-8"
+            className="w-full max-w-md space-y-4 mb-8"
             aria-labelledby="actions-heading"
           >
             <h2 id="actions-heading" className="sr-only">
               Get Started
             </h2>
 
-            {/* Create Room Button */}
-            <Button
-              onClick={onCreateRoom}
-              variant="solid"
-              size="lg"
-              className="w-full h-16 text-lg rounded-2xl 
-                        bg-blue-600 hover:bg-blue-700 
-                        text-white shadow-lg hover:shadow-xl 
-                        transform hover:scale-105 transition-all duration-200"
-              aria-label="Join an existing audio bubble with QR code"
-            >
-              <div className="flex items-center justify-center space-x-3">
-                <QrCode className="h-5 w-5" aria-hidden="true" />
-                <span>Create Audio Bubble</span>
-              </div>
-            </Button>
+            {/* Join Room Button - Primary */}
+            <div className="w-full">
+              <button
+                onClick={onJoinRoom}
+                className="w-full h-20 text-xl font-bold rounded-2xl 
+                          bg-blue-600 hover:bg-blue-700 
+                          text-white shadow-xl hover:shadow-2xl 
+                          transform hover:scale-105 hover:-translate-y-1
+                          transition-all duration-300 ease-out
+                          group relative
+                          active:scale-95
+                          border-0
+                          flex items-center justify-center space-x-4
+                          cursor-pointer
+                          z-10
+                          block"
+                aria-label="Join an existing audio bubble with QR code"
+              >
+                <QrCode className="h-6 w-6" />
+                <span>Join a Bubble</span>
+                <ArrowRight className="h-6 w-6" />
+              </button>
+            </div>
 
-            {/* Join Room Button */}
-            <Button
-              onClick={onJoinRoom}
-              variant="solid"
-              size="lg"
-              className="w-full h-16 text-lg rounded-2xl 
-                        bg-blue-600 hover:bg-blue-700 
-                        text-white shadow-lg hover:shadow-xl 
-                        transform hover:scale-105 transition-all duration-200"
-              aria-label="Join an existing audio bubble with QR code"
+            {/* Create Room Button - Secondary */}
+            <button
+              onClick={onCreateRoom}
+              className="w-full h-16 text-lg font-semibold rounded-2xl 
+                        bg-white hover:bg-blue-50
+                        text-gray-700 hover:text-blue-700
+                        border-2 border-gray-300 hover:border-blue-400 hover:shadow-lg
+                        transform hover:scale-105 hover:-translate-y-1
+                        transition-all duration-300 ease-out
+                        group relative overflow-hidden
+                        active:scale-95
+                        flex items-center justify-center space-x-4
+                        cursor-pointer"
+              aria-label="Create a new audio bubble"
             >
-              <div className="flex items-center justify-center space-x-3">
-                <QrCode className="h-5 w-5" aria-hidden="true" />
-                <span>Join with QR Code</span>
+              {/* Background glow effect */}
+              <div className="absolute inset-0 bg-blue-100/50 rounded-2xl scale-0 group-hover:scale-100 transition-all duration-300" />
+              
+              <div className="p-2 bg-blue-100 rounded-xl group-hover:bg-blue-200 group-hover:rotate-12 transition-all duration-300">
+                <Users className="h-5 w-5 text-blue-600 group-hover:scale-110 transition-transform duration-300" />
               </div>
-            </Button>
+              <span className="group-hover:tracking-wider transition-all duration-300">Create a Bubble</span>
+              <div className="group-hover:translate-x-2 group-hover:scale-110 transition-all duration-300">
+                <ArrowRight className="h-5 w-5 text-gray-500 group-hover:text-blue-600" />
+              </div>
+            </button>
           </section>
 
           {/* Learn More Button */}
@@ -103,10 +120,10 @@ export function HomePage({
                 variant="ghost"
                 size="lg"
                 className="relative z-10 text-blue-600 group-hover:text-white hover:text-blue-700 hover:bg-blue-50/50 rounded-xl transition-all duration-200"
-                aria-label="Learn more about Audio Bubbles"
+                aria-label="Learn more"
               >
                 <Info className="h-4 w-4 mr-2 group-hover:text-white" aria-hidden="true" />
-                <span className="group-hover:text-white">Learn More About Audio Bubbles</span>
+                <span className="group-hover:text-white">Learn More</span>
               </Button>
             </CardContent>
           </Card>
