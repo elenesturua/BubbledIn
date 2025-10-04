@@ -249,9 +249,8 @@ class PeerManager {
       // Clean up senders and receivers
       const senders = peerConnection.peer.getSenders();
       senders.forEach(sender => {
-        if (sender.track) {
-          sender.track.stop();
-        }
+        // Don't stop the track - just replace it with null to remove from this peer
+        // The track should continue for other participants
         try {
           sender.replaceTrack(null);
         } catch (error) {
