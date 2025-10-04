@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Button } from "./ui/button";
 import { X } from "lucide-react";
 import { toast } from "sonner";
-import { QrReader } from 'react-qr-reader';
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 interface QRCodeScannerProps {
   onQRCodeScanned: (data: string) => void;
@@ -12,11 +12,11 @@ interface QRCodeScannerProps {
 export function QRCodeScanner({ onQRCodeScanned, onClose }: QRCodeScannerProps) {
   const [error, setError] = useState<string | null>(null);
 
-  const handleScan = (result: any) => {
-    if (result?.text) {
-      const data = result.text;
+  const handleScan = (result: any[]) => {
+    if (result && result.length > 0) {
+      const data = result[0]?.rawValue;
 
-      if (data.includes("?room=") || data.includes("/room/")) {
+      if (data && (data.includes("?room=") || data.includes("/room/"))) {
         toast.success("Room QR code detected!");
         onQRCodeScanned(data);
       } else {
@@ -43,12 +43,16 @@ export function QRCodeScanner({ onQRCodeScanned, onClose }: QRCodeScannerProps) 
 
           {/* QR Scanner */}
           <div className="aspect-square rounded-2xl overflow-hidden mb-4">
-            <QrReader
+            <Scanner
                 constraints={{ facingMode: "environment" }}
-                onResult={(result, error) => {
-                  if (!!result) handleScan(result);
+                onScan={handleScan}
+                onError={(error) => {
+                  console.error('QR Scanner error:', error);
                 }}
-                videoStyle={{ width: "100%", height: "100%", objectFit: "cover" }}
+                styles={{
+                  container: { width: "100%", height: "100%" },
+                  video: { width: "100%", height: "100%", objectFit: "cover" }
+                }}
             />
           </div>
 
