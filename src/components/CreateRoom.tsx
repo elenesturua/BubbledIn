@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Switch } from './ui/switch';
 import { QRCodeDisplay } from './QRCodeDisplay';
-import { ArrowLeft, Copy, Users, Settings, Share2, Check } from 'lucide-react';
+import { ArrowLeft, Copy, Share2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { signaling, type RoomData } from '../webrtc';
 
@@ -53,15 +52,10 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
     }
   };
 
-  const copyRoomLink = () => {
-    if (roomData) {
-      navigator.clipboard.writeText(roomData.url);
-      toast.success('Room link copied!');
-    }
-  };
-
   const shareRoom = async () => {
-    if (roomData && navigator.share) {
+    if (!roomData) return;
+    
+    if (navigator.share) {
       try {
         await navigator.share({
           title: `Join ${roomData.name}`,
@@ -69,10 +63,12 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
           url: roomData.url
         });
       } catch (error) {
-        copyRoomLink();
+        navigator.clipboard.writeText(roomData.url);
+        toast.success('Room link copied!');
       }
     } else {
-      copyRoomLink();
+      navigator.clipboard.writeText(roomData.url);
+      toast.success('Room link copied!');
     }
   };
 
@@ -121,7 +117,12 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
             </Button>
             
             <Button 
-              onClick={copyRoomLink} 
+              onClick={() => {
+                if (roomData) {
+                  navigator.clipboard.writeText(roomData.url);
+                  toast.success('Room link copied!');
+                }
+              }} 
               variant="outline" 
               className="w-full h-12 rounded-2xl border-2"
               size="lg"

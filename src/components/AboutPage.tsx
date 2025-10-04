@@ -8,7 +8,6 @@ import {
   Shield,
   Zap,
 } from "lucide-react";
-import React from "react";
 
 interface AboutPageProps {
   onBack: () => void;

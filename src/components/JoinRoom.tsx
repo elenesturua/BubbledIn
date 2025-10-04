@@ -1,8 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
-import { Label } from './ui/label';
 import { ArrowLeft, Camera, QrCode, Loader2, Scan, Hash } from 'lucide-react';
 import { toast } from 'sonner';
 import { signaling, type RoomData } from '../webrtc';
@@ -31,7 +29,6 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
       }
       setIsScanning(true);
     } catch (error) {
-      console.error('Camera access error:', error);
       toast.error('Camera access denied. Try entering room code instead.');
       setActiveTab('code');
     }
@@ -55,17 +52,15 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
     
     try {
       const roomData = await signaling.joinRoom(roomCode.toUpperCase(), 'Participant');
-      setIsJoining(false);
       onRoomJoined(roomData);
       toast.success('Joined audio bubble!');
     } catch (error) {
-      console.error('Failed to join room:', error);
-      setIsJoining(false);
       toast.error('Failed to join room. Please check the room code and try again.');
+    } finally {
+      setIsJoining(false);
     }
   };
 
-  // Simulate QR code detection
   const simulateQRDetection = async () => {
     try {
       stopCamera();
@@ -73,7 +68,6 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
       onRoomJoined(roomData);
       toast.success('QR code detected! Joining...');
     } catch (error) {
-      console.error('Failed to join via QR:', error);
       toast.error('Failed to join room via QR code');
     }
   };
