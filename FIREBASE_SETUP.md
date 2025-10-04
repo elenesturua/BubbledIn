@@ -78,6 +78,7 @@ The app will create the following Firestore structure:
 /rooms/{roomId}
   ├── name: string
   ├── settings: object
+  ├── isActive: boolean
   ├── createdAt: timestamp
   ├── hostId: string
   └── participants: array
@@ -95,6 +96,8 @@ The app will create the following Firestore structure:
   ├── iceCandidates: array
   └── timestamp: timestamp
 ```
+
+**Note:** The `isActive` field is automatically set to `false` when all participants leave the room. Once inactive, the room cannot be joined by new participants.
 
 ## 8. Testing
 

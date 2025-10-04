@@ -7,7 +7,9 @@ import {
   collection, 
   doc, 
   addDoc, 
-  getDoc, 
+  getDoc,
+  getDocs,
+  setDoc,
   onSnapshot, 
   updateDoc,
   deleteDoc,
@@ -31,6 +33,7 @@ export interface RoomData {
     transcription: boolean;
   };
   url: string;
+  isActive: boolean;
   createdAt?: any;
   hostId?: string;
 }
@@ -86,16 +89,14 @@ class SignalingService {
         host: true,
         settings,
         url: `${window.location.origin}?room=${roomId}`,
+        isActive: true,
         createdAt: serverTimestamp(),
         hostId: userId
       };
 
       // Create room document in Firebase
       const roomRef = doc(db, 'rooms', roomId);
-      await updateDoc(roomRef, roomData as any).catch(async () => {
-        // If document doesn't exist, create it
-        await addDoc(collection(db, 'rooms'), { ...roomData, id: roomId } as any);
-      });
+      await setDoc(roomRef, roomData as any);
 
       // Add host as first participant
       await this.addParticipant(roomId, userId, 'You', true);
@@ -135,6 +136,11 @@ class SignalingService {
 
       const roomData = { ...roomSnap.data(), id: roomId.toUpperCase() } as RoomData;
       
+      // Check if room is active
+      if (!roomData.isActive) {
+        throw new Error('Room is no longer active');
+      }
+      
       // Add participant to room
       await this.addParticipant(roomId.toUpperCase(), userId, participantName, false);
       
@@ -157,9 +163,14 @@ class SignalingService {
     try {
       const userId = authService.getCurrentUserId();
       if (userId) {
+        const roomId = this.currentRoom.id;
+        
         // Remove participant from Firebase
-        const participantRef = doc(db, 'rooms', this.currentRoom.id, 'participants', userId);
+        const participantRef = doc(db, 'rooms', roomId, 'participants', userId);
         await deleteDoc(participantRef);
+        
+        // Check if this was the last participant and mark room as inactive
+        await this.checkAndDeactivateRoom(roomId);
       }
     } catch (error) {
       console.error('Failed to leave room:', error);
@@ -357,10 +368,27 @@ class SignalingService {
     };
 
     const participantRef = doc(db, 'rooms', roomId, 'participants', userId);
-    await updateDoc(participantRef, participantData as any).catch(async () => {
-      // Create document if it doesn't exist
-      await addDoc(collection(db, 'rooms', roomId, 'participants'), participantData as any);
-    });
+    await setDoc(participantRef, participantData as any);
+  }
+
+  /**
+   * Check if room has no participants and mark it as inactive
+   */
+  private async checkAndDeactivateRoom(roomId: string): Promise<void> {
+    try {
+      // Query the participants collection to check if empty
+      const participantsRef = collection(db, 'rooms', roomId, 'participants');
+      const participantsSnapshot = await getDocs(participantsRef);
+      
+      if (participantsSnapshot.empty) {
+        // No participants left, mark room as inactive
+        const roomRef = doc(db, 'rooms', roomId);
+        await updateDoc(roomRef, { isActive: false });
+        console.log(`Room ${roomId} marked as inactive - no participants remaining`);
+      }
+    } catch (error) {
+      console.error('Failed to check/deactivate room:', error);
+    }
   }
 
   private generateRoomId(): string {
