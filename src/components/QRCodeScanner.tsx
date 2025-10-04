@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { QrReader } from "react-qr-reader";
+import { QrScanner } from "@yudiel/react-qr-scanner";
 import { Button } from "./ui/button";
 import { X } from "lucide-react";
 import { toast } from "sonner";
@@ -13,8 +13,8 @@ export function QRCodeScanner({ onQRCodeScanned, onClose }: QRCodeScannerProps) 
   const [error, setError] = useState<string | null>(null);
 
   const handleScan = (result: any) => {
-    if (result?.text) {
-      const data = result.text;
+    if (result?.[0]) {
+      const data = result[0].rawValue;
 
       if (data.includes("?room=") || data.includes("/room/")) {
         toast.success("Room QR code detected!");
@@ -43,11 +43,11 @@ export function QRCodeScanner({ onQRCodeScanned, onClose }: QRCodeScannerProps) 
 
         {/* QR Scanner */}
         <div className="aspect-square rounded-2xl overflow-hidden mb-4">
-          <QrReader
+          <QrScanner
             constraints={{ facingMode: "environment" }}
-            onResult={(result, error) => {
-              if (!!result) handleScan(result);
-            }}
+            onDecode={(result) => handleScan(result)}
+            onError={(error) => console.log(error)}
+            containerStyle={{ width: "100%", height: "100%" }}
             videoStyle={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
         </div>
