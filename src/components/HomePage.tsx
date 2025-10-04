@@ -32,7 +32,7 @@ export function HomePage({
                 BubbledIn
               </h1>
               <p className="text-xl text-gray-700 max-w-lg mx-auto leading-relaxed">
-                Create private audio spaces in noisy environments.
+                Create private spaces in noisy environments.
               </p>
             </div>
 
@@ -74,7 +74,7 @@ export function HomePage({
                           cursor-pointer
                           z-10
                           block"
-                aria-label="Join an existing audio bubble with QR code"
+                aria-label="Join an existing bubble with QR code"
               >
                 <QrCode className="h-6 w-6" />
                 <span>Join a Bubble</span>
@@ -83,8 +83,10 @@ export function HomePage({
             </div>
 
             {/* Create Room Button - Secondary */}
-            <button
+            <Button
               onClick={onCreateRoom}
+              variant="outline"
+              size="lg"
               className="w-full h-16 text-lg font-semibold rounded-2xl 
                         bg-white hover:bg-blue-50
                         text-gray-700 hover:text-blue-700
@@ -92,22 +94,15 @@ export function HomePage({
                         transform hover:scale-105 hover:-translate-y-1
                         transition-all duration-300 ease-out
                         group relative overflow-hidden
-                        active:scale-95
-                        flex items-center justify-center space-x-4
-                        cursor-pointer"
-              aria-label="Create a new audio bubble"
+                        active:scale-95"
+              aria-label="Create a new bubble"
             >
-              {/* Background glow effect */}
-              <div className="absolute inset-0 bg-blue-100/50 rounded-2xl scale-0 group-hover:scale-100 transition-all duration-300" />
-              
-              <div className="p-2 bg-blue-100 rounded-xl group-hover:bg-blue-200 group-hover:rotate-12 transition-all duration-300">
-                <Users className="h-5 w-5 text-blue-600 group-hover:scale-110 transition-transform duration-300" />
-              </div>
-              <span className="group-hover:tracking-wider transition-all duration-300">Create a Bubble</span>
-              <div className="group-hover:translate-x-2 group-hover:scale-110 transition-all duration-300">
+              <div className="flex items-center justify-center space-x-3">
+                <Users className="h-5 w-5 text-blue-600" />
+                <span>Create a Bubble</span>
                 <ArrowRight className="h-5 w-5 text-gray-500 group-hover:text-blue-600" />
               </div>
-            </button>
+            </Button>
           </section>
 
           {/* Learn More Button */}
