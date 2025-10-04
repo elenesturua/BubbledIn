@@ -3,7 +3,6 @@ interface RoomData {
   name: string;
   settings: {
     pushToTalk: boolean;
-    presenterMode: boolean;
     transcription: boolean;
   };
   host: boolean;

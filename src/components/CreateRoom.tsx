@@ -17,7 +17,6 @@ interface CreateRoomProps {
 export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
   const [roomName, setRoomName] = useState('');
   const [pushToTalk, setPushToTalk] = useState(false);
-  const [presenterMode, setPresenterMode] = useState(false);
   const [transcription, setTranscription] = useState(true);
   const [roomCreated, setRoomCreated] = useState(false);
   const [roomData, setRoomData] = useState<any>(null);
@@ -37,7 +36,6 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
     try {
       const newRoomData = await signaling.createRoom(roomName, {
         pushToTalk,
-        presenterMode,
         transcription
       });
       
@@ -141,12 +139,6 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Presenter Mode</span>
-                <span className={`text-sm font-medium ${presenterMode ? 'text-green-600' : 'text-gray-400'}`}>
-                  {presenterMode ? 'On' : 'Off'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
                 <span className="text-gray-600">Live Captions</span>
                 <span className={`text-sm font-medium ${transcription ? 'text-green-600' : 'text-gray-400'}`}>
                   {transcription ? 'On' : 'Off'}
@@ -213,14 +205,6 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
                 <p className="text-sm text-gray-500">Tap and hold to speak</p>
               </div>
               <Switch checked={pushToTalk} onCheckedChange={setPushToTalk} />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <Label className="text-base">Presenter Mode</Label>
-                <p className="text-sm text-gray-500">Boost your voice volume</p>
-              </div>
-              <Switch checked={presenterMode} onCheckedChange={setPresenterMode} />
             </div>
 
             <div className="flex items-center justify-between">
