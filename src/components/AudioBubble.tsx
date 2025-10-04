@@ -241,18 +241,33 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
 
         // Cleanup on unmount
         return () => {
+          console.log('🧹 Component unmounting, cleaning up...');
+          
           // Unsubscribe from Firebase listeners
           if (unsubscribeParticipantsRef.current) {
+            console.log('📡 Unsubscribing from participants listener (unmount)');
             unsubscribeParticipantsRef.current();
             unsubscribeParticipantsRef.current = null;
           }
           if (unsubscribeRoomRef.current) {
+            console.log('📡 Unsubscribing from room listener (unmount)');
             unsubscribeRoomRef.current();
             unsubscribeRoomRef.current = null;
           }
           
           // Cleanup WebRTC connections (idempotent)
+          console.log('🔌 Cleaning up WebRTC connections (unmount)');
           peerManager.cleanup();
+          
+          // Cleanup transcription microphone stream
+          if (stream) {
+            console.log('🎤 Stopping transcription microphone stream (unmount)');
+            stream.getTracks().forEach(track => {
+              console.log('🛑 Stopping track (unmount):', track.kind, track.label);
+              track.stop();
+              track.enabled = false;
+            });
+          }
         };
       } catch (error) {
         announce('Failed to connect to audio bubble');
@@ -332,30 +347,62 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     vibrate([200, 100, 200, 100, 200]);
     
     try {
+      console.log('🧹 Starting comprehensive cleanup...');
+      
       // Unsubscribe from Firebase listeners FIRST to prevent new connections
       if (unsubscribeParticipantsRef.current) {
+        console.log('📡 Unsubscribing from participants listener');
         unsubscribeParticipantsRef.current();
         unsubscribeParticipantsRef.current = null;
       }
       if (unsubscribeRoomRef.current) {
+        console.log('📡 Unsubscribing from room listener');
         unsubscribeRoomRef.current();
         unsubscribeRoomRef.current = null;
       }
       
       // Cleanup WebRTC connections (stops all tracks and closes connections)
+      console.log('🔌 Cleaning up WebRTC connections');
       peerManager.cleanup();
       
+      // Cleanup transcription microphone stream
+      if (stream) {
+        console.log('🎤 Stopping transcription microphone stream');
+        stream.getTracks().forEach(track => {
+          console.log('🛑 Stopping track:', track.kind, track.label);
+          track.stop();
+          track.enabled = false;
+        });
+        setStream(null);
+      }
+      
       // Leave room in Firebase
+      console.log('🚪 Leaving room in Firebase');
       await signaling.leaveRoom();
       
+      console.log('✅ Cleanup completed successfully');
       toast.info('Left audio bubble');
+      
+      // Refresh the page to ensure all microphone permissions are released
+      console.log('🔄 Refreshing page to release microphone permissions');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+      
     } catch (error) {
+      console.error('❌ Error during cleanup:', error);
       toast.error('Error leaving room');
       
       // Ensure cleanup happens even if Firebase fails
       peerManager.cleanup();
+      
+      // Still refresh the page to release microphone
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } finally {
-      onLeave();
+      // Don't call onLeave() since we're refreshing the page
+      console.log('🔄 Page refresh initiated');
     }
   };
 
