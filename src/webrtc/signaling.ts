@@ -29,7 +29,6 @@ export interface RoomData {
   host: boolean;
   settings: {
     pushToTalk: boolean;
-    presenterMode: boolean;
     transcription: boolean;
   };
   url: string;

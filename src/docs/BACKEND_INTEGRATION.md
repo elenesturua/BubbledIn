@@ -55,7 +55,6 @@ const createRoom = (roomName, hostId) => {
     createdAt: Date.now(),
     settings: {
       transcription: true,
-      presenterMode: false,
       pushToTalk: false,
     },
   };
@@ -113,7 +112,6 @@ const transcribeAudioStream = (audioStream, roomId) => {
   expiresAt: Date,
   settings: {
     transcription: Boolean,
-    presenterMode: Boolean,
     pushToTalk: Boolean
   },
   transcriptions: [{

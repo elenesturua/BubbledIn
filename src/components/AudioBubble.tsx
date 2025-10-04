@@ -34,7 +34,6 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(75);
   const [isPushToTalk, setIsPushToTalk] = useState(roomData.settings?.pushToTalk || false);
-  const [isPresenterMode, setIsPresenterMode] = useState(roomData.settings?.presenterMode || false);
   const [showTranscription, setShowTranscription] = useState(false);
   const [activeTab, setActiveTab] = useState<'audio' | 'participants' | 'captions'>('audio');
   
@@ -312,7 +311,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     peerManager.setMuted(newMutedState);
     
     // Update signaling service
-    const currentParticipant = participants.find(p => p.id === authService.getCurrentUserId());
+    const currentParticipant = participants.find(p => p.id === 'host' || p.isHost);
     if (currentParticipant) {
       try {
         await signaling.updateParticipantMute(currentParticipant.id, newMutedState);
@@ -505,11 +504,9 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
                 isMuted={isMuted}
                 volume={volume}
                 isPushToTalk={isPushToTalk}
-                isPresenterMode={isPresenterMode}
                 onMuteToggle={toggleMute}
                 onVolumeChange={handleVolumeChange}
                 onPushToTalkToggle={setIsPushToTalk}
-                onPresenterModeToggle={setIsPresenterMode}
               />
             </div>
           </div>
