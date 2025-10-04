@@ -176,11 +176,6 @@ class PeerManager {
     // Add remote stream to audio element
     peerConnection.audioElement.srcObject = stream;
     peerConnection.stream = stream;
-
-    // Add tracks to peer connection
-    stream.getTracks().forEach(track => {
-      peerConnection.peer.addTrack(track, stream);
-    });
   }
 
   /**
@@ -189,13 +184,41 @@ class PeerManager {
   removePeer(participantId: string): void {
     const peerConnection = this.peers.get(participantId);
     if (peerConnection) {
-      // Close peer connection
-      peerConnection.peer.close();
-      
-      // Remove audio element
+      // Detach and remove audio element
+      peerConnection.audioElement.srcObject = null;
       if (peerConnection.audioElement.parentNode) {
         peerConnection.audioElement.parentNode.removeChild(peerConnection.audioElement);
       }
+      
+      // Stop any remote stream tracks
+      if (peerConnection.stream) {
+        peerConnection.stream.getTracks().forEach(track => track.stop());
+      }
+      
+      // Clean up RTCPeerConnection senders, receivers, and transceivers
+      const senders = peerConnection.peer.getSenders();
+      senders.forEach(sender => {
+        if (sender.track) {
+          sender.track.stop();
+        }
+        sender.replaceTrack(null);
+      });
+      
+      const receivers = peerConnection.peer.getReceivers();
+      receivers.forEach(receiver => {
+        if (receiver.track) {
+          receiver.track.stop();
+        }
+      });
+      
+      const transceivers = peerConnection.peer.getTransceivers();
+      transceivers.forEach(transceiver => {
+        transceiver.stop();
+        transceiver.direction = 'inactive';
+      });
+      
+      // Close peer connection
+      peerConnection.peer.close();
       
       this.peers.delete(participantId);
       this.callbacks.onParticipantLeft?.(participantId);
@@ -235,6 +258,51 @@ class PeerManager {
    */
   getLocalStream(): MediaStream | undefined {
     return this.localStream;
+  }
+
+  /**
+   * Remove local tracks from all peer connections
+   */
+  private removeLocalTracksFromAllPeers(): void {
+    console.log('Removing local tracks from all peer connections...');
+    this.peers.forEach((peerConnection, participantId) => {
+      const senders = peerConnection.peer.getSenders();
+      senders.forEach(sender => {
+        if (sender.track) {
+          console.log(`Removing local track from peer ${participantId}: ${sender.track.kind} (id: ${sender.track.id})`);
+          try {
+            peerConnection.peer.removeTrack(sender);
+          } catch (e) {
+            console.warn(`Failed to remove track from peer ${participantId}:`, e);
+          }
+        }
+      });
+    });
+    console.log('All local tracks removed from peers');
+  }
+
+  /**
+   * Stop local microphone stream
+   */
+  stopLocalStream(): void {
+    console.log('Explicitly stopping local stream...');
+    
+    // First, remove tracks from all peer connections
+    this.removeLocalTracksFromAllPeers();
+    
+    // Then stop the tracks
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => {
+        console.log(`Force stopping track: ${track.kind} (id: ${track.id}, readyState: ${track.readyState})`);
+        track.stop();
+        track.enabled = false;
+        console.log(`Track after stop: readyState=${track.readyState}, enabled=${track.enabled}`);
+      });
+      this.localStream = undefined;
+      console.log('Local stream forcefully stopped and cleared');
+    } else {
+      console.log('No local stream to stop');
+    }
   }
 
   /**
@@ -331,14 +399,13 @@ class PeerManager {
    * Cleanup all connections
    */
   cleanup(): void {
+    console.log('PeerManager cleanup started');
+    
     // Close all peer connections
-    this.peers.forEach((peerConnection, participantId) => {
+    const participantIds = Array.from(this.peers.keys());
+    participantIds.forEach(participantId => {
       this.removePeer(participantId);
     });
-
-    // Unsubscribe from signaling
-    this.signalingUnsubscribes.forEach(unsubscribe => unsubscribe());
-    this.signalingUnsubscribes = [];
 
     // Stop local stream
     if (this.localStream) {
@@ -346,9 +413,15 @@ class PeerManager {
       this.localStream = undefined;
     }
 
+    // Unsubscribe from signaling
+    this.signalingUnsubscribes.forEach(unsubscribe => unsubscribe());
+    this.signalingUnsubscribes = [];
+
     // Reset state
     this.currentRoomId = undefined;
     this.currentUserId = undefined;
+    
+    console.log('PeerManager cleanup completed');
   }
 
   private setupPeerEventHandlers(peerConnection: PeerConnection, participantId: string): void {

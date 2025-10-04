@@ -41,6 +41,10 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   
+  // Refs to store unsubscribe functions
+  const unsubscribeParticipantsRef = useRef<(() => void) | null>(null);
+  const unsubscribeRoomRef = useRef<(() => void) | null>(null);
+  
   // Status announcer for accessibility
   const { message, announce, announceJoin, announceLeave, announceMute, announceConnect } = useStatusAnnouncer();
   
@@ -90,7 +94,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         });
 
         // Subscribe to participant updates
-        const unsubscribeParticipants = signaling.onParticipants(roomData.id, async (updatedParticipants) => {
+        unsubscribeParticipantsRef.current = signaling.onParticipants(roomData.id, async (updatedParticipants) => {
           setParticipants(updatedParticipants);
           
           // Handle participant changes
@@ -134,7 +138,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         });
 
         // Subscribe to room updates
-        const unsubscribeRoom = signaling.onRoomUpdate(roomData.id, (room) => {
+        unsubscribeRoomRef.current = signaling.onRoomUpdate(roomData.id, (room) => {
           if (room) {
             // Room still exists
             console.log('Room updated:', room);
@@ -148,8 +152,18 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
 
         // Cleanup on unmount
         return () => {
-          unsubscribeParticipants();
-          unsubscribeRoom();
+          console.log('useEffect cleanup running...');
+          if (unsubscribeParticipantsRef.current) {
+            console.log('Unsubscribing from participants...');
+            unsubscribeParticipantsRef.current();
+            unsubscribeParticipantsRef.current = null;
+          }
+          if (unsubscribeRoomRef.current) {
+            console.log('Unsubscribing from room...');
+            unsubscribeRoomRef.current();
+            unsubscribeRoomRef.current = null;
+          }
+          console.log('Cleaning up peer manager...');
           peerManager.cleanup();
         };
       } catch (error) {
@@ -232,19 +246,48 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   };
 
   const leaveRoom = async () => {
+    console.log('=== LEAVE ROOM STARTED ===');
     announce('Leaving audio bubble');
     vibrate([200, 100, 200, 100, 200]);
-    toast.info('Left audio bubble');
     
     try {
-      // Leave room in Firebase
+      // STEP 0: Unsubscribe from Firebase listeners FIRST to stop room updates
+      console.log('STEP 0: Unsubscribing from Firebase listeners...');
+      if (unsubscribeParticipantsRef.current) {
+        unsubscribeParticipantsRef.current();
+        unsubscribeParticipantsRef.current = null;
+        console.log('Unsubscribed from participants');
+      }
+      if (unsubscribeRoomRef.current) {
+        unsubscribeRoomRef.current();
+        unsubscribeRoomRef.current = null;
+        console.log('Unsubscribed from room updates');
+      }
+      
+      // STEP 1: Stop microphone
+      console.log('STEP 1: Stopping microphone...');
+      peerManager.stopLocalStream();
+      console.log('Microphone stopped');
+      toast.success('Microphone turned off');
+      
+      // STEP 2: Leave room in Firebase
+      console.log('STEP 2: Leaving room in Firebase...');
       await signaling.leaveRoom();
+      console.log('Left room in Firebase');
+      
+      // STEP 3: Cleanup WebRTC connections
+      console.log('STEP 3: Cleaning up remaining WebRTC connections...');
+      peerManager.cleanup();
+      console.log('WebRTC cleanup completed');
+      
+      toast.info('Left audio bubble');
     } catch (error) {
       console.error('Failed to leave room:', error);
+      toast.error('Error leaving room');
     } finally {
-      // Cleanup WebRTC connections
-      peerManager.cleanup();
+      console.log('STEP 4: Calling onLeave()...');
       onLeave();
+      console.log('=== LEAVE ROOM COMPLETED ===');
     }
   };
 
