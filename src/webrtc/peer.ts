@@ -516,7 +516,7 @@ class PeerManager {
           )
         );
       
-      if (isOwnStream) {
+      if (isOwnStream || participantId === this.currentUserId) {
         // Don't play our own stream - prevents users from hearing themselves
         return;
       }
