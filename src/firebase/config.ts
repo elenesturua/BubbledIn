@@ -47,15 +47,15 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 
 // Initialize analytics (optional)
-let analytics;
-if (typeof window !== 'undefined') {
-  try {
-    analytics = getAnalytics(app);
-  } catch (error) {
-    console.log('📊 Analytics not available:', error.message);
-  }
-}
+// let analytics;
+// if (typeof window !== 'undefined') {
+//   try {
+//     analytics = getAnalytics(app);
+//   } catch (error) {
+//     console.log('📊 Analytics not available:', error.message);
+//   }
+// }
 
 // Export the app instance for other uses
 export default app;
-export { analytics };
+// export { analytics };
