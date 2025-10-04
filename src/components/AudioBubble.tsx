@@ -415,14 +415,6 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
       <header className="bg-white border-b border-gray-200 px-4 py-4 shadow-sm" role="banner">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div 
-              className={`w-2.5 h-2.5 rounded-full ${
-                connectionStatus === 'connected' ? 'bg-green-500' : 
-                connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-              }`}
-              role="img"
-              aria-label={`Connection status: ${connectionStatus}`}
-            />
             <div>
                <h1 className="text-lg font-semibold text-gray-900 leading-tight">{roomData.name}</h1>
               <div className="flex items-center space-x-2 mt-0.5">
@@ -460,13 +452,6 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
             </Button>
           </div>
         </div>
-        
-        {/* Live region for connection status announcements */}
-        <div aria-live="polite" aria-atomic="true" className="sr-only">
-          {connectionStatus === 'connecting' && 'Connecting to audio bubble...'}
-          {connectionStatus === 'connected' && 'Connected to audio bubble'}
-          {connectionStatus === 'disconnected' && 'Disconnected from audio bubble'}
-        </div>
       </header>
 
       {/* Main Content */}
@@ -478,26 +463,6 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
             id="audio-panel"
             aria-labelledby="audio-tab"
           >
-            {/* Connection Status */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100" role="status" aria-live="polite">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div 
-                    className={`w-3 h-3 rounded-full ${
-                      connectionStatus === 'connected' ? 'bg-green-500' : 
-                      connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-                    }`}
-                    role="img"
-                    aria-label={`Connection status: ${connectionStatus}`}
-                  />
-                  <span className="font-medium text-sm">
-                    {connectionStatus === 'connected' ? 'Connected' : 
-                     connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
-                  </span>
-                </div>
-                <span className="text-xs text-gray-500" aria-label="Using WebRTC protocol">WebRTC</span>
-              </div>
-            </div>
 
             {/* Audio Controls */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
