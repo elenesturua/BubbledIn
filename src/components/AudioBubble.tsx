@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -19,7 +19,7 @@ import {
   MicOff,
   MoreVertical
 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface AudioBubbleProps {
   roomData: any;
@@ -34,6 +34,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const [isPresenterMode, setIsPresenterMode] = useState(roomData.settings?.presenterMode || false);
   const [showTranscription, setShowTranscription] = useState(false);
   const [activeTab, setActiveTab] = useState<'audio' | 'participants' | 'captions'>('audio');
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const [participants, setParticipants] = useState([
     { id: '1', name: 'You', isHost: roomData.host, isMuted: false, isPresenter: roomData.host },
     { id: '2', name: 'Alex Chen', isHost: false, isMuted: false, isPresenter: false },
@@ -41,6 +42,8 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   ]);
 
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  
+  const userId = 'user-1';
   
   // Simple accessibility helpers
   const announce = (message: string) => {
@@ -59,6 +62,26 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   useEffect(() => {
     // Announce room entry
     announce(`Joining audio bubble: ${roomData.name}. Connecting to audio...`);
+    
+    // Set up microphone access
+    const setupMicrophone = async () => {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 44100
+          }
+        });
+        setStream(mediaStream);
+        announce('Microphone access granted. Transcription features available.');
+      } catch (error) {
+        console.warn('Microphone access denied:', error);
+        announce('Microphone access denied. Transcription features unavailable.');
+      }
+    };
+
+    setupMicrophone();
     
     // Simulate connection process
     const timer = setTimeout(() => {
@@ -268,7 +291,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
                 <h2 className="font-semibold" id="captions-heading">Live Captions</h2>
               </div>
               <div aria-labelledby="captions-heading">
-                <TranscriptionPanel />
+                <TranscriptionPanel stream={stream} userId={userId} />
               </div>
             </div>
           </div>

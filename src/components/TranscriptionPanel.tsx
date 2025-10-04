@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Download, Copy, Share2 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { Download, Copy, Share2, Mic, MicOff } from 'lucide-react';
+import { toast } from 'sonner';
+import { useTranscription } from '../hooks/useTranscription';
 
 interface TranscriptionEntry {
   id: string;
@@ -13,66 +14,61 @@ interface TranscriptionEntry {
   confidence: number;
 }
 
-export function TranscriptionPanel() {
+interface TranscriptionPanelProps {
+  stream: MediaStream | null;
+  userId: string;
+}
+
+export function TranscriptionPanel({ stream, userId }: TranscriptionPanelProps) {
   const [transcripts, setTranscripts] = useState<TranscriptionEntry[]>([]);
-  const [isListening, setIsListening] = useState(true);
+  const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Mock transcription data
-  const mockTranscripts: TranscriptionEntry[] = [
-    {
-      id: '1',
-      speaker: 'Alex Chen',
-      text: 'Hi everyone, welcome to our project demo. Today we\'ll be presenting our solution for improving accessibility in loud environments.',
-      timestamp: '10:32 AM',
-      confidence: 0.95
-    },
-    {
-      id: '2', 
-      speaker: 'You',
-      text: 'Thanks Alex. Let me start by explaining the problem we identified during HackMIT.',
-      timestamp: '10:33 AM',
-      confidence: 0.92
-    },
-    {
-      id: '3',
-      speaker: 'Sarah Kim',
-      text: 'The background noise here is really challenging, but our audio bubble technology helps filter it out.',
-      timestamp: '10:34 AM',
-      confidence: 0.88
-    },
-    {
-      id: '4',
-      speaker: 'Alex Chen',
-      text: 'As you can see, the real-time transcription is working perfectly even in this noisy environment.',
-      timestamp: '10:35 AM',
-      confidence: 0.94
-    }
-  ];
+  const {
+    isTranscribing,
+    startTranscription,
+    stopTranscription,
+    finalTranscripts,
+    interimTranscript
+  } = useTranscription();
 
-  // Simulate real-time transcription
+  // Update transcripts when final transcripts change
   useEffect(() => {
-    if (mockTranscripts.length === 0) return;
-    
-    let currentIndex = 0;
-    const interval = setInterval(() => {
-      if (currentIndex < mockTranscripts.length) {
-        setTranscripts(prev => [...prev, mockTranscripts[currentIndex]]);
-        currentIndex++;
-      } else {
-        clearInterval(interval);
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, []);
+    if (finalTranscripts.length > 0) {
+      const latestTranscripts =(finalTranscripts.map((transcript, index) => ({
+        id: `${userId}-${Date.now()}-${index}`,
+        speaker: userId === 'user-1' ? 'You' : `Participant ${userId.split('-')[1]}`,
+        text: transcript,
+        timestamp: new Date().toLocaleTimeString(),
+        confidence: 0.95 // Web Speech API confidence would come from result.confidence if available
+      })));
+      
+      setTranscripts(prev => [...prev, ...latestTranscripts]);
+    }
+  }, [finalTranscripts, userId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [transcripts]);
+  }, [transcripts, interimTranscript]);
+
+  const handleStartStop = () => {
+    if (isTranscribing) {
+      stopTranscription();
+      setIsListening(false);
+      toast.success('Transcription stopped');
+    } else {
+      if (!stream) {
+        toast.error('Microphone access required for transcription');
+        return;
+      }
+      startTranscription();
+      setIsListening(true);
+      toast.success('Transcription started');
+    }
+  };
 
   const shareTranscript = async () => {
     const content = transcripts.map(t => 
@@ -121,13 +117,35 @@ export function TranscriptionPanel() {
       {/* Status */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className={`w-3 h-3 rounded-full ${isListening ? 'bg-red-500 animate-pulse' : 'bg-gray-400'}`} />
+          <div className={`w-3 h-3 rounded-full ${isTranscribing ? 'bg-red-500 animate-pulse' : 'bg-gray-400'}`} />
           <span className="font-medium">
-            {isListening ? 'Live Captions' : 'Stopped'}
+            {isTranscribing ? 'Live Captions' : 'Stopped'}
           </span>
+          {!stream && (
+            <span className="text-xs text-gray-500">(Microphone access needed)</span>
+          )}
         </div>
         
         <div className="flex space-x-2">
+          <Button 
+            onClick={handleStartStop}
+            variant={isTranscribing ? "destructive" : "default"}
+            size="sm"
+            disabled={!stream}
+            className="h-8"
+          >
+            {isTranscribing ? (
+              <>
+                <MicOff className="h-3 w-3 mr-1" />
+                Stop
+              </>
+            ) : (
+              <>
+                <Mic className="h-3 w-3 mr-1" />
+                Resume
+              </>
+            )}
+          </Button>
           <Button 
             onClick={shareTranscript} 
             variant="outline" 
@@ -154,11 +172,11 @@ export function TranscriptionPanel() {
       {/* Transcription Display */}
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full w-full border rounded-2xl p-4 bg-gray-50" ref={scrollRef}>
-          {transcripts.length === 0 ? (
+          {transcripts.length === 0 && !interimTranscript ? (
             <div className="flex items-center justify-center h-32 text-gray-500">
               <div className="text-center space-y-3">
-                <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse mx-auto" />
-                <p>Listening for speech...</p>
+                <div className={`w-4 h-4 rounded-full mx-auto ${isTranscribing ? 'bg-red-500 animate-pulse' : 'bg-gray-400'}`} />
+                <p>{stream ? 'Click Resume to start transcription' : 'Microphone access required for transcription'}</p>
               </div>
             </div>
           ) : (
@@ -185,8 +203,28 @@ export function TranscriptionPanel() {
                 </div>
               ))}
               
+              {/* Interim transcript */}
+              {interimTranscript && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-medium">Speaking</span>
+                      <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800">
+                        Live
+                      </Badge>
+                    </div>
+                    <span className="text-xs text-gray-500">Now</span>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border-l-4 border-gray-300">
+                    <p className="leading-relaxed text-gray-600">
+                      {interimTranscript}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
               {/* Typing indicator */}
-              {isListening && (
+              {isTranscribing && !interimTranscript && (
                 <div className="flex items-center space-x-3 text-gray-500 py-2">
                   <div className="flex space-x-1">
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
