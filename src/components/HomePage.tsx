@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import React from "react";
 import { Button } from "./ui/button";
-import { Waves, QrCode, Info, Wrench } from "lucide-react";
+import { Waves, QrCode, Info } from "lucide-react";
 import { Logo } from "./Logo";
-import { FirebaseTest } from "./FirebaseTest";
 
 interface HomePageProps {
   onCreateRoom: () => void;
@@ -15,23 +14,6 @@ export function HomePage({
   onJoinRoom,
   onAbout,
 }: HomePageProps) {
-  const [showFirebaseTest, setShowFirebaseTest] = useState(false);
-  
-  if (showFirebaseTest) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 flex flex-col">
-        <div className="p-6">
-          <Button onClick={() => setShowFirebaseTest(false)} variant="ghost" className="mb-4">
-            ← Back to Home
-          </Button>
-        </div>
-        <div className="flex-1 flex items-center justify-center px-6">
-          <FirebaseTest />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 flex flex-col">
       {/* Main Content */}
@@ -100,18 +82,6 @@ export function HomePage({
             >
               <Info className="h-4 w-4 md:h-5 md:w-5 mr-2" aria-hidden="true" />
               Learn More
-            </Button>
-
-            {/* Developer Test Button */}
-            <Button
-              onClick={() => setShowFirebaseTest(true)}
-              variant="outline"
-              size="sm"
-              className="w-full h-10 text-xs rounded-xl border-gray-300 text-gray-600 hover:bg-gray-50"
-              aria-label="Test Firebase integration"
-            >
-              <Wrench className="h-3 w-3 mr-1" aria-hidden="true" />
-              Developer: Test Firebase
             </Button>
           </section>
         </div>
