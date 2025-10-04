@@ -1,1 +1,15 @@
 node_modules
+<<<<<<< HEAD
+=======
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.vscode
+build
+.DS_Store
+.package-lock.json
+package-lock.json
+>>>>>>> d4f0c985bf368eccba7fa3ffc3b1e2518d99c97b
+node_modules/

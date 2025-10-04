@@ -1,5 +1,6 @@
 import { Button } from "./ui/button";
 import { Volume2, Waves, Info } from "lucide-react";
+import React from "react";
 
 interface HomePageProps {
   onCreateRoom: () => void;

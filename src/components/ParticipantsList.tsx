@@ -2,14 +2,7 @@ import React from 'react';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Mic, MicOff, Crown, Volume2 } from 'lucide-react';
-
-interface Participant {
-  id: string;
-  name: string;
-  isHost: boolean;
-  isMuted: boolean;
-  isPresenter: boolean;
-}
+import { type Participant } from '../webrtc';
 
 interface ParticipantsListProps {
   participants: Participant[];
@@ -33,8 +26,8 @@ export function ParticipantsList({ participants }: ParticipantsListProps) {
   };
 
   const getParticipantStatus = (participant: Participant) => {
-    const statuses = [];
-    if (participant.id === '1') statuses.push('You');
+    const statuses: string[] = [];
+    if (participant.id === '1' || participant.id === 'host') statuses.push('You');
     if (participant.isHost) statuses.push('Host');
     if (participant.isPresenter) statuses.push('Presenter');
     if (participant.isMuted) statuses.push('Muted');
@@ -90,7 +83,7 @@ export function ParticipantsList({ participants }: ParticipantsListProps) {
 
           <div className="flex items-center space-x-3" role="group" aria-label="Audio status">
             {/* Speaking indicator */}
-            {!participant.isMuted && (
+            {!participant.isMuted && participant.isSpeaking && (
               <div 
                 className="flex space-x-1" 
                 role="img" 
