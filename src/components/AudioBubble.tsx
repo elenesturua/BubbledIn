@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { AudioControls } from './AudioControls';
 import { ParticipantsList } from './ParticipantsList';
 import { TranscriptionPanel } from './TranscriptionPanel';
+import { testWebSpeechAPI, quickSpeechTest } from '../hooks/useTranscription';
 import { 
   Volume2, 
   VolumeX, 
@@ -19,7 +20,7 @@ import {
   MicOff,
   MoreVertical
 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface AudioBubbleProps {
   roomData: any;
@@ -33,6 +34,9 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const [isPushToTalk, setIsPushToTalk] = useState(roomData.settings?.pushToTalk || false);
   const [isPresenterMode, setIsPresenterMode] = useState(roomData.settings?.presenterMode || false);
   const [showTranscription, setShowTranscription] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [activeTab, setActiveTab] = useState<'participants' | 'captions'>('captions');
+  const userId = 'user-1'; // or generate a unique ID
   const [participants, setParticipants] = useState([
     { id: '1', name: 'You', isHost: roomData.host, isMuted: false, isPresenter: roomData.host },
     { id: '2', name: 'Alex Chen', isHost: false, isMuted: false, isPresenter: false },
@@ -59,6 +63,18 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     // Announce room entry
     announce(`Joining audio bubble: ${roomData.name}. Connecting to audio...`);
     
+    // Get microphone access for transcription
+    const setupMicrophone = async () => {
+      try {
+        const userStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setStream(userStream);
+        console.log('🎤 Microphone access granted for transcription');
+      } catch (error) {
+        console.warn('⚠️ Could not access microphone:', error);
+        toast.warning('Microphone access needed for live captions');
+      }
+    };
+
     // Simulate connection process
     const timer = setTimeout(() => {
       setIsConnected(true);
@@ -66,9 +82,18 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
       announce('Successfully connected to audio bubble. You can now communicate with other participants.');
       vibrate([200, 100, 200]);
       toast.success('Connected to audio bubble!');
+      
+      // Setup microphone after connection
+      setupMicrophone();
     }, 2000);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      // Cleanup stream on unmount
+      if (stream) {
+        stream.getTracks().forEach(task => task.stop());
+      }
+    };
   }, [roomData.name, announce, vibrate]);
 
   const shareRoom = async () => {
@@ -124,6 +149,33 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     onLeave();
   };
 
+  const testSpeechAPI = async () => {
+    console.log('🧪 Testing Web Speech API...');
+    
+    // Test API availability
+    const apiTest = testWebSpeechAPI();
+    console.log('📱 API Test:', apiTest);
+    
+    if (!apiTest.supported) {
+      toast.error(`❌ Speech API Issue: ${apiTest.error}`);
+      return;
+    }
+
+    // Test microphone and speech recognition
+    const fullTest = await quickSpeechTest();
+    console.log('🎤 Full Test:', fullTest);
+    
+    if (fullTest.mic && fullTest.speech) {
+      toast.success('✅ Web Speech API is working perfectly!');
+      announce('Web Speech API test successful');
+    } else {
+      toast.error(`❌ Test Failed: ${fullTest.error}`);
+      announce(`Web Speech API test failed: ${fullTest.error}`);
+    }
+    
+    vibrate(100);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 flex flex-col">
       {/* Header */}
@@ -155,6 +207,16 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
           </div>
           
           <div className="flex items-center space-x-2" role="toolbar" aria-label="Room actions">
+            <Button 
+              onClick={testSpeechAPI} 
+              variant="ghost" 
+              size="sm" 
+              className="p-2 focus-ring touch-target"
+              aria-label="Test speech API"
+              title="Test Web Speech API"
+            >
+              🧪
+            </Button>
             <Button 
               onClick={shareRoom} 
               variant="ghost" 
@@ -247,11 +309,89 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
             />
           </div>
 
-          {/* Live Captions */}
+          {/* Tab Navigation */}
           {showTranscription && (
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-              <h3 className="font-semibold mb-3" id="captions-heading">Live Caption</h3>
-              <TranscriptionPanel />
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 h-96">
+              <div className="border-b border-gray-200">
+                <nav className="flex space-x-8 px-4">
+                  <button
+                    className={`py-3 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'participants' 
+                        ? 'border-blue-500 text-blue-600' 
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                    onClick={() => setActiveTab('participants')}
+                    id="participants-tab"
+                    role="tab"
+                    aria-selected={activeTab === 'participants'}
+                    aria-controls="participants-panel"
+                  >
+                    Participants
+                  </button>
+                  <button
+                    className={`py-3 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'captions' 
+                        ? 'border-blue-500 text-blue-600' 
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                    onClick={() => setActiveTab('captions')}
+                    id="captions-tab"
+                    role="tab"
+                    aria-selected={activeTab === 'captions'}
+                    aria-controls="captions-panel"
+                  >
+                    Live Captions
+                  </button>
+                </nav>
+              </div>
+              
+              {/* Tab Panels */}
+              {activeTab === 'participants' && (
+                <div 
+                  className="p-4 h-full overflow-y-auto"
+                  role="tabpanel"
+                  id="participants-panel"
+                  aria-labelledby="participants-tab"
+                >
+                  <div className="space-y-3">
+                    {participants.map((participant) => (
+                      <div key={participant.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                            {participant.name.charAt(0)}
+                          </div>
+                          <span className="font-medium">{participant.name}</span>
+                          {participant.isHost && (
+                            <Badge className="bg-yellow-100 text-yellow-800 text-xs">
+                              <Crown className="h-2.5 w-2.5 mr-1" />
+                              Host
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {participant.isMuted && (
+                            <MicOff className="h-4 w-4 text-red-500" />
+                          )}
+                          <span className="text-xs text-gray-500">
+                            {participant.isMuted ? 'Muted' : 'Live'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'captions' && (
+                <div 
+                  className="p-4 h-full overflow-y-auto"
+                  role="tabpanel"
+                  id="captions-panel"
+                  aria-labelledby="captions-tab"
+                >
+                  <TranscriptionPanel stream={stream} userId={userId} />
+                </div>
+              )}
             </div>
           )}
         </div>
