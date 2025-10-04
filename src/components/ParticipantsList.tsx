@@ -1,3 +1,4 @@
+import React from 'react';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Mic, MicOff, Crown, Volume2 } from 'lucide-react';
@@ -41,7 +42,6 @@ export function ParticipantsList({ participants }: ParticipantsListProps) {
     
     return statuses.join(', ');
   };
-
   return (
     <div className="space-y-3">
       {participants.map((participant) => (
