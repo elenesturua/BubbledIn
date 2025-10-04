@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HomePage } from './components/HomePage';
 import { AboutPage } from './components/AboutPage';
 import { CreateRoom } from './components/CreateRoom';
 import { JoinRoom } from './components/JoinRoom';
 import { AudioBubble } from './components/AudioBubble';
 import { Toaster } from './components/ui/sonner';
-import React from 'react';
 
 type AppState = 'home' | 'about' | 'create' | 'join' | 'bubble';
 
@@ -29,18 +28,6 @@ export default function App() {
     };
   }, []);
 
-  const handleAbout = () => {
-    setCurrentState('about');
-  };
-
-  const handleCreateRoom = () => {
-    setCurrentState('create');
-  };
-
-  const handleJoinRoom = () => {
-    setCurrentState('join');
-  };
-
   const handleRoomCreated = (roomData: any) => {
     setCurrentRoom(roomData);
     setCurrentState('bubble');
@@ -49,11 +36,6 @@ export default function App() {
   const handleRoomJoined = (roomData: any) => {
     setCurrentRoom(roomData);
     setCurrentState('bubble');
-  };
-
-  const handleBackToHome = () => {
-    setCurrentState('home');
-    setCurrentRoom(null);
   };
 
   const handleLeaveRoom = () => {
@@ -70,61 +52,67 @@ export default function App() {
     }, 100);
   };
 
-  // Get page title for screen readers
-  const getPageInfo = () => {
-    switch (currentState) {
-      case 'home':
-        return { title: 'Audio Bubbles - Home' };
-      case 'about':
-        return { title: 'Audio Bubbles - About' };
-      case 'create':
-        return { title: 'Audio Bubbles - Create Room' };
-      case 'join':
-        return { title: 'Audio Bubbles - Join Room' };
-      case 'bubble':
-        return { title: `Audio Bubbles - ${currentRoom?.name || 'Room'}` };
-      default:
-        return { title: 'Audio Bubbles' };
-    }
-  };
-
-  const pageInfo = getPageInfo();
-
   // Update document title for screen readers
   useEffect(() => {
-    document.title = pageInfo.title;
-  }, [pageInfo.title]);
+    const getTitle = () => {
+      switch (currentState) {
+        case 'home': return 'Audio Bubbles - Home';
+        case 'about': return 'Audio Bubbles - About';
+        case 'create': return 'Audio Bubbles - Create Room';
+        case 'join': return 'Audio Bubbles - Join Room';
+        case 'bubble': return `Audio Bubbles - ${currentRoom?.name || 'Room'}`;
+        default: return 'Audio Bubbles';
+      }
+    };
+    
+    document.title = getTitle();
+  }, [currentState, currentRoom?.name]);
 
   return (
     <div className="min-h-screen bg-background">
       {/* Hidden heading for screen readers */}
-      <h1 className="sr-only">{pageInfo.title}</h1>
+      <h1 className="sr-only">
+        {currentState === 'home' && 'Audio Bubbles - Home'}
+        {currentState === 'about' && 'Audio Bubbles - About'}
+        {currentState === 'create' && 'Audio Bubbles - Create Room'}
+        {currentState === 'join' && 'Audio Bubbles - Join Room'}
+        {currentState === 'bubble' && `Audio Bubbles - ${currentRoom?.name || 'Room'}`}
+      </h1>
       
       <main id="main-content" className="min-h-screen">
         {currentState === 'home' && (
           <HomePage 
-            onCreateRoom={handleCreateRoom}
-            onJoinRoom={handleJoinRoom}
-            onAbout={handleAbout}
+            onCreateRoom={() => setCurrentState('create')}
+            onJoinRoom={() => setCurrentState('join')}
+            onAbout={() => setCurrentState('about')}
           />
         )}
 
         {currentState === 'about' && (
           <AboutPage 
-            onBack={handleBackToHome}
+            onBack={() => {
+              setCurrentState('home');
+              setCurrentRoom(null);
+            }}
           />
         )}
 
         {currentState === 'create' && (
           <CreateRoom 
-            onBack={handleBackToHome}
+            onBack={() => {
+              setCurrentState('home');
+              setCurrentRoom(null);
+            }}
             onRoomCreated={handleRoomCreated}
           />
         )}
 
         {currentState === 'join' && (
           <JoinRoom 
-            onBack={handleBackToHome}
+            onBack={() => {
+              setCurrentState('home');
+              setCurrentRoom(null);
+            }}
             onRoomJoined={handleRoomJoined}
           />
         )}

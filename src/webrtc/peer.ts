@@ -34,6 +34,7 @@ class PeerManager {
    */
   async initializeLocalStream(): Promise<MediaStream> {
     try {
+      console.log('🎤 Initializing local media stream...');
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -41,8 +42,10 @@ class PeerManager {
           autoGainControl: true
         }
       });
+      console.log('✅ Local media stream initialized successfully');
       return this.localStream;
     } catch (error) {
+      console.error('❌ Failed to access microphone:', error);
       throw new Error(`Failed to access microphone: ${error}`);
     }
   }
@@ -51,21 +54,26 @@ class PeerManager {
    * Initialize peer connections for a room
    */
   async initializeRoom(roomId: string): Promise<void> {
+    console.log('🏠 Initializing room:', roomId);
     this.currentRoomId = roomId;
     this.currentUserId = authService.getCurrentUserId() || undefined;
     
     if (!this.currentUserId) {
+      console.error('❌ User not authenticated');
       throw new Error('User not authenticated');
     }
 
+    console.log('👤 Current user ID:', this.currentUserId);
     // Set up signaling listeners for existing participants
     await this.setupSignalingListeners(roomId);
+    console.log('📡 Signaling listeners set up for room:', roomId);
   }
 
   /**
    * Create a new peer connection
    */
   async createPeer(participantId: string): Promise<PeerConnection> {
+    console.log('🔗 Creating peer connection for participant:', participantId);
     const configuration: RTCConfiguration = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -93,12 +101,15 @@ class PeerManager {
 
     // Add local stream to peer connection
     if (this.localStream) {
+      console.log('📤 Adding local stream tracks to peer connection');
       this.localStream.getTracks().forEach(track => {
         peer.addTrack(track, this.localStream!);
+        console.log('📤 Added track:', track.kind, 'to peer:', participantId);
       });
     }
 
     this.peers.set(participantId, peerConnection);
+    console.log('✅ Peer connection created for:', participantId);
     return peerConnection;
   }
 
@@ -107,18 +118,24 @@ class PeerManager {
    */
   async connectToParticipant(participantId: string): Promise<void> {
     if (!this.currentRoomId || !this.currentUserId) {
+      console.error('❌ Room not initialized');
       throw new Error('Room not initialized');
     }
 
+    console.log('🤝 Connecting to participant:', participantId);
     // Create peer connection
     const peerConnection = await this.createPeer(participantId);
     
     // Create offer
+    console.log('📤 Creating offer for participant:', participantId);
     const offer = await peerConnection.peer.createOffer();
     await peerConnection.peer.setLocalDescription(offer);
+    console.log('📤 Offer created and set as local description');
     
     // Send offer through signaling
+    console.log('📡 Sending offer to participant:', participantId);
     await signaling.sendOffer(this.currentRoomId, this.currentUserId, participantId, offer);
+    console.log('✅ Offer sent successfully to:', participantId);
   }
 
   /**
@@ -126,30 +143,42 @@ class PeerManager {
    */
   async handleOffer(fromId: string, offer: RTCSessionDescriptionInit): Promise<void> {
     if (!this.currentRoomId || !this.currentUserId) {
+      console.error('❌ Room not initialized');
       throw new Error('Room not initialized');
     }
 
+    console.log('📥 Received offer from participant:', fromId);
     // Create peer connection
     const peerConnection = await this.createPeer(fromId);
     
     // Set remote description
+    console.log('📥 Setting remote description for participant:', fromId);
     await peerConnection.peer.setRemoteDescription(offer);
     
     // Create answer
+    console.log('📤 Creating answer for participant:', fromId);
     const answer = await peerConnection.peer.createAnswer();
     await peerConnection.peer.setLocalDescription(answer);
+    console.log('📤 Answer created and set as local description');
     
     // Send answer through signaling
+    console.log('📡 Sending answer to participant:', fromId);
     await signaling.sendAnswer(this.currentRoomId, this.currentUserId, fromId, answer);
+    console.log('✅ Answer sent successfully to:', fromId);
   }
 
   /**
    * Handle incoming answer
    */
   async handleAnswer(fromId: string, answer: RTCSessionDescriptionInit): Promise<void> {
+    console.log('📥 Received answer from participant:', fromId);
     const peerConnection = this.peers.get(fromId);
     if (peerConnection) {
+      console.log('📥 Setting remote description (answer) for participant:', fromId);
       await peerConnection.peer.setRemoteDescription(answer);
+      console.log('✅ Answer processed for participant:', fromId);
+    } else {
+      console.warn('⚠️ No peer connection found for participant:', fromId);
     }
   }
 
@@ -157,9 +186,14 @@ class PeerManager {
    * Handle incoming ICE candidate
    */
   async handleIceCandidate(fromId: string, candidate: RTCIceCandidateInit): Promise<void> {
+    console.log('🧊 Received ICE candidate from participant:', fromId);
     const peerConnection = this.peers.get(fromId);
     if (peerConnection) {
+      console.log('🧊 Adding ICE candidate for participant:', fromId);
       await peerConnection.peer.addIceCandidate(candidate);
+      console.log('✅ ICE candidate added for participant:', fromId);
+    } else {
+      console.warn('⚠️ No peer connection found for ICE candidate from participant:', fromId);
     }
   }
 
@@ -167,97 +201,84 @@ class PeerManager {
    * Add remote stream to peer connection
    */
   addRemoteStream(participantId: string, stream: MediaStream): void {
+    console.log('🎵 Adding remote stream for participant:', participantId);
     const peerConnection = this.peers.get(participantId);
     if (!peerConnection) {
-      console.warn(`No peer connection found for participant ${participantId}`);
+      console.warn('⚠️ No peer connection found for participant:', participantId);
       return;
     }
 
     // Add remote stream to audio element
     peerConnection.audioElement.srcObject = stream;
     peerConnection.stream = stream;
+    console.log('✅ Remote stream added for participant:', participantId);
   }
 
-  /**
-   * Remove peer connection with complete cleanup
-   */
   removePeer(participantId: string): void {
+    console.log('🗑️ Removing peer connection for participant:', participantId);
     const peerConnection = this.peers.get(participantId);
     if (!peerConnection) {
-      console.log(`No peer connection found for ${participantId}, skipping cleanup`);
+      console.log('ℹ️ No peer connection found for participant:', participantId);
       return;
     }
-
-    console.log(`Cleaning up peer connection for ${participantId}`);
     
     try {
-      // STEP 1: Stop and detach audio element completely
+      // Stop and detach audio element
       peerConnection.audioElement.pause();
       peerConnection.audioElement.srcObject = null;
       peerConnection.audioElement.load();
       
-      // Remove audio element from DOM
       if (peerConnection.audioElement.parentNode) {
         peerConnection.audioElement.parentNode.removeChild(peerConnection.audioElement);
       }
       
-      // STEP 2: Stop all remote stream tracks
+      // Stop all stream tracks
       if (peerConnection.stream) {
-        peerConnection.stream.getTracks().forEach(track => {
-          console.log(`Stopping remote track: ${track.kind} (id: ${track.id})`);
-          track.stop();
-        });
+        peerConnection.stream.getTracks().forEach(track => track.stop());
         peerConnection.stream = undefined;
       }
       
-      // STEP 3: Clean up all senders (local tracks)
+      // Clean up senders and receivers
       const senders = peerConnection.peer.getSenders();
       senders.forEach(sender => {
         if (sender.track) {
-          console.log(`Stopping sender track: ${sender.track.kind} (id: ${sender.track.id})`);
           sender.track.stop();
         }
         try {
           sender.replaceTrack(null);
         } catch (error) {
-          console.warn(`Failed to replace track for sender:`, error);
+          // Ignore replace track errors
         }
       });
       
-      // STEP 4: Clean up all receivers (remote tracks)
       const receivers = peerConnection.peer.getReceivers();
       receivers.forEach(receiver => {
         if (receiver.track) {
-          console.log(`Stopping receiver track: ${receiver.track.kind} (id: ${receiver.track.id})`);
           receiver.track.stop();
         }
       });
       
-      // STEP 5: Stop all transceivers
+      // Stop transceivers
       const transceivers = peerConnection.peer.getTransceivers();
       transceivers.forEach(transceiver => {
         try {
           transceiver.stop();
           transceiver.direction = 'inactive';
         } catch (error) {
-          console.warn(`Failed to stop transceiver:`, error);
+          // Ignore transceiver stop errors
         }
       });
       
-      // STEP 6: Close peer connection
+      // Close peer connection
       if (peerConnection.peer.connectionState !== 'closed') {
         peerConnection.peer.close();
       }
       
-      // STEP 7: Remove from peers map
       this.peers.delete(participantId);
-      
-      // STEP 8: Notify callback
       this.callbacks.onParticipantLeft?.(participantId);
-      
-      console.log(`Peer connection cleanup completed for ${participantId}`);
+      console.log('✅ Peer connection removed for participant:', participantId);
     } catch (error) {
-      console.error(`Error cleaning up peer connection for ${participantId}:`, error);
+      console.error('❌ Error removing peer connection for participant:', participantId, error);
       // Still remove from peers map even if cleanup failed
       this.peers.delete(participantId);
     }
@@ -267,10 +288,14 @@ class PeerManager {
    * Mute/unmute local stream
    */
   setMuted(muted: boolean): void {
+    console.log('🔇 Setting local stream muted:', muted);
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach(track => {
         track.enabled = !muted;
+        console.log('🔇 Track enabled:', !muted, 'for track:', track.kind);
       });
+    } else {
+      console.warn('⚠️ No local stream available for muting');
     }
   }
 
@@ -278,9 +303,13 @@ class PeerManager {
    * Set volume for a specific participant
    */
   setParticipantVolume(participantId: string, volume: number): void {
+    console.log('🔊 Setting volume for participant:', participantId, 'to', volume + '%');
     const peerConnection = this.peers.get(participantId);
     if (peerConnection) {
       peerConnection.audioElement.volume = volume / 100;
+      console.log('✅ Volume set for participant:', participantId);
+    } else {
+      console.warn('⚠️ No peer connection found for volume adjustment:', participantId);
     }
   }
 
@@ -298,72 +327,44 @@ class PeerManager {
     return this.localStream;
   }
 
-  /**
-   * Remove local tracks from all peer connections
-   */
   private removeLocalTracksFromAllPeers(): void {
-    console.log('Removing local tracks from all peer connections...');
-    this.peers.forEach((peerConnection, participantId) => {
+    this.peers.forEach((peerConnection) => {
       const senders = peerConnection.peer.getSenders();
       senders.forEach(sender => {
         if (sender.track) {
-          console.log(`Removing local track from peer ${participantId}: ${sender.track.kind} (id: ${sender.track.id})`);
           try {
             peerConnection.peer.removeTrack(sender);
           } catch (e) {
-            console.warn(`Failed to remove track from peer ${participantId}:`, e);
+            // Ignore remove track errors
           }
         }
       });
     });
-    console.log('All local tracks removed from peers');
   }
 
-  /**
-   * Stop local microphone stream
-   */
   stopLocalStream(): void {
-    console.log('Explicitly stopping local stream...');
-    
-    // First, remove tracks from all peer connections
     this.removeLocalTracksFromAllPeers();
     
-    // Then stop the tracks
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
-        console.log(`Force stopping track: ${track.kind} (id: ${track.id}, readyState: ${track.readyState})`);
         track.stop();
         track.enabled = false;
-        console.log(`Track after stop: readyState=${track.readyState}, enabled=${track.enabled}`);
       });
       this.localStream = undefined;
-      console.log('Local stream forcefully stopped and cleared');
-    } else {
-      console.log('No local stream to stop');
     }
   }
 
-  /**
-   * Force stop all remote streams and detach audio elements
-   */
   private stopAllRemoteStreams(): void {
-    console.log('Stopping all remote streams...');
-    this.peers.forEach((peerConnection, participantId) => {
-      // Stop all remote stream tracks
+    this.peers.forEach((peerConnection) => {
       if (peerConnection.stream) {
-        peerConnection.stream.getTracks().forEach(track => {
-          console.log(`Stopping remote track from ${participantId}: ${track.kind} (id: ${track.id})`);
-          track.stop();
-        });
+        peerConnection.stream.getTracks().forEach(track => track.stop());
         peerConnection.stream = undefined;
       }
       
-      // Detach audio element from any source
       peerConnection.audioElement.srcObject = null;
       peerConnection.audioElement.pause();
       peerConnection.audioElement.load();
     });
-    console.log('All remote streams stopped');
   }
 
   /**
@@ -394,7 +395,7 @@ class PeerManager {
           }
         }
       } catch (error) {
-        console.error(`Error handling signaling from ${fromId}:`, error);
+        // Ignore signaling errors
       }
     });
 
@@ -411,9 +412,8 @@ class PeerManager {
       if (participant.id !== this.currentUserId && !this.peers.has(participant.id)) {
         try {
           await this.connectToParticipant(participant.id);
-          console.log(`Connected to participant: ${participant.id}`);
         } catch (error) {
-          console.error(`Failed to connect to participant ${participant.id}:`, error);
+          // Connection failed, continue with other participants
         }
       }
     }
@@ -428,9 +428,8 @@ class PeerManager {
     if (!this.peers.has(participantId)) {
       try {
         await this.connectToParticipant(participantId);
-        console.log(`Connected to new participant: ${participantId}`);
       } catch (error) {
-        console.error(`Failed to connect to new participant ${participantId}:`, error);
+        // Connection failed, continue
       }
     }
   }
@@ -441,68 +440,56 @@ class PeerManager {
   handleParticipantLeft(participantId: string): void {
     if (this.peers.has(participantId)) {
       this.removePeer(participantId);
-      console.log(`Removed participant: ${participantId}`);
     }
   }
 
-  /**
-   * Send data channel message
-   */
   sendDataChannelMessage(participantId: string, message: any): void {
     const peerConnection = this.peers.get(participantId);
     if (peerConnection && peerConnection.peer.connectionState === 'connected') {
       // Implementation would depend on data channel setup
-      console.log('Sending data channel message:', message);
     }
   }
 
-  /**
-   * Cleanup all connections - idempotent and safe to call multiple times
-   */
   cleanup(): void {
-    console.log('PeerManager cleanup started');
-    
-    // Check if already cleaned up
+    console.log('🧹 Starting peer manager cleanup...');
     if (this.peers.size === 0 && !this.localStream && this.signalingUnsubscribes.length === 0) {
-      console.log('PeerManager already cleaned up, skipping');
+      console.log('ℹ️ Already cleaned up, skipping');
       return;
     }
     
-    // STEP 1: Stop all remote streams first
+    console.log('📊 Current state - Peers:', this.peers.size, 'Local stream:', !!this.localStream, 'Signaling subs:', this.signalingUnsubscribes.length);
+    
     this.stopAllRemoteStreams();
     
-    // STEP 2: Close all peer connections with full teardown
     const participantIds = Array.from(this.peers.keys());
+    console.log('🗑️ Removing', participantIds.length, 'peer connections');
     participantIds.forEach(participantId => {
       this.removePeer(participantId);
     });
 
-    // STEP 3: Stop local stream completely
     if (this.localStream) {
+      console.log('🛑 Stopping local stream tracks');
       this.localStream.getTracks().forEach(track => {
-        console.log(`Stopping local track: ${track.kind} (id: ${track.id})`);
         track.stop();
         track.enabled = false;
       });
       this.localStream = undefined;
     }
 
-    // STEP 4: Unsubscribe from signaling to prevent new connections
+    console.log('📡 Unsubscribing from signaling');
     this.signalingUnsubscribes.forEach(unsubscribe => {
       try {
         unsubscribe();
       } catch (error) {
-        console.warn('Error unsubscribing from signaling:', error);
+        // Ignore unsubscribe errors
       }
     });
     this.signalingUnsubscribes = [];
 
-    // STEP 5: Reset state
     this.currentRoomId = undefined;
     this.currentUserId = undefined;
     this.callbacks = {};
-    
-    console.log('PeerManager cleanup completed');
+    console.log('✅ Peer manager cleanup completed');
   }
 
   private setupPeerEventHandlers(peerConnection: PeerConnection, participantId: string): void {
@@ -510,47 +497,55 @@ class PeerManager {
 
     // Handle incoming remote stream
     peer.ontrack = (event) => {
+      console.log('🎵 Received remote track from participant:', participantId);
       const [remoteStream] = event.streams;
       audioElement.srcObject = remoteStream;
       peerConnection.stream = remoteStream;
+      console.log('✅ Remote stream connected for participant:', participantId);
     };
 
     // Handle ICE candidates
     peer.onicecandidate = async (event) => {
       if (event.candidate && this.currentRoomId && this.currentUserId) {
+        console.log('🧊 Generated ICE candidate for participant:', participantId);
         try {
           await signaling.sendIceCandidate(this.currentRoomId, this.currentUserId, participantId, event.candidate);
+          console.log('📡 ICE candidate sent to participant:', participantId);
         } catch (error) {
-          console.error('Failed to send ICE candidate:', error);
+          console.error('❌ Failed to send ICE candidate to participant:', participantId, error);
         }
       }
     };
 
     // Handle connection state changes
     peer.onconnectionstatechange = () => {
+      console.log('🔄 Connection state changed for participant:', participantId, 'to:', peer.connectionState);
       this.callbacks.onConnectionStateChange?.(peer.connectionState);
       
       if (peer.connectionState === 'connected') {
+        console.log('✅ Connected to participant:', participantId);
         this.callbacks.onParticipantJoined?.(participantId);
       } else if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') {
+        console.log('❌ Disconnected from participant:', participantId, 'state:', peer.connectionState);
         this.callbacks.onParticipantLeft?.(participantId);
       }
     };
 
     // Handle ICE connection state changes
     peer.oniceconnectionstatechange = () => {
-      console.log(`ICE connection state for ${participantId}:`, peer.iceConnectionState);
-      
+      console.log('🧊 ICE connection state changed for participant:', participantId, 'to:', peer.iceConnectionState);
       if (peer.iceConnectionState === 'connected') {
+        console.log('✅ ICE connected to participant:', participantId);
         this.callbacks.onParticipantJoined?.(participantId);
       } else if (peer.iceConnectionState === 'disconnected' || peer.iceConnectionState === 'failed') {
+        console.log('❌ ICE disconnected from participant:', participantId, 'state:', peer.iceConnectionState);
         this.callbacks.onParticipantLeft?.(participantId);
       }
     };
 
     // Handle ICE candidate errors
     peer.onicecandidateerror = (error) => {
-      console.error(`ICE candidate error for ${participantId}:`, error);
+      console.error('❌ ICE candidate error for participant:', participantId, error);
       this.callbacks.onError?.(new Error(`ICE candidate failed: ${error.errorText}`));
     };
 

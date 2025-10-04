@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { AudioControls } from './AudioControls';
 import { ParticipantsList } from './ParticipantsList';
@@ -10,16 +9,13 @@ import { WebRTCDebugger } from './WebRTCDebugger';
 import { 
   Volume2, 
   VolumeX, 
-  Settings, 
   LogOut, 
   Users,
   Mic,
-  Copy,
   Crown,
   Share2,
   MessageSquare,
-  MicOff,
-  MoreVertical
+  MicOff
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { signaling, peerManager, type RoomData, type Participant } from '../webrtc';
@@ -64,14 +60,17 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     // Initialize WebRTC connection AND Web Speech API
     const initializeConnection = async () => {
       try {
+        console.log('🚀 Initializing AudioBubble connection for room:', roomData.name, 'ID:', roomData.id);
         announce(`Joining audio bubble: ${roomData.name}. Connecting to audio...`);
         
         // STEP 1: Initialize local media stream for WebRTC
+        console.log('🎤 Step 1: Initializing local media stream...');
         await peerManager.initializeLocalStream();
         
         // STEP 2: Set up Web Speech API microphone access
         const setupTranscriptionMicrophone = async () => {
           try {
+            console.log('🎤 Step 2: Setting up transcription microphone...');
             const mediaStream = await navigator.mediaDevices.getUserMedia({ 
               audio: {
                 echoCancellation: true,
@@ -80,9 +79,10 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
               }
             });
             setStream(mediaStream);
+            console.log('✅ Transcription microphone access granted');
             announce('Microphone access granted for Web Speech API transcription');
           } catch (error) {
-            console.warn('Web Speech API microphone access denied:', error);
+            console.warn('⚠️ Web Speech API microphone access denied, continuing without transcription');
             announce('Microphone access denied for transcription features');
           }
         };
@@ -90,37 +90,46 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         setupTranscriptionMicrophone();
         
         // STEP 3: Initialize room for peer connections
+        console.log('🏠 Step 3: Initializing room for peer connections...');
         await peerManager.initializeRoom(roomData.id);
         
         // Set up peer manager callbacks
+        console.log('📞 Step 4: Setting up peer manager callbacks...');
         peerManager.setCallbacks({
           onConnectionStateChange: (state) => {
+            console.log('🔄 WebRTC connection state changed to:', state);
             if (state === 'connected') {
+              console.log('✅ Connected to audio bubble');
               setIsConnected(true);
               setConnectionStatus('connected');
               announceConnect(true);
               vibrate([200, 100, 200]);
               toast.success('Connected to audio bubble via WebRTC! Real-time transcription available.');
             } else if (state === 'disconnected') {
+              console.log('❌ Disconnected from audio bubble');
               setIsConnected(false);
               setConnectionStatus('disconnected');
               announceConnect(false);
             }
           },
           onParticipantJoined: (participantId) => {
+            console.log('👋 Participant joined:', participantId);
             announceJoin(`Participant ${participantId}`);
           },
           onParticipantLeft: (participantId) => {
+            console.log('👋 Participant left:', participantId);
             announceLeave(`Participant ${participantId}`);
           },
           onError: (error) => {
-            console.error('WebRTC error:', error);
+            console.error('❌ WebRTC error:', error);
             toast.error('Connection error occurred');
           }
         });
 
         // Subscribe to participant updates
+        console.log('📡 Step 5: Subscribing to participant updates...');
         unsubscribeParticipantsRef.current = signaling.onParticipants(roomData.id, async (updatedParticipants) => {
+          console.log('👥 Participants updated:', updatedParticipants.length, 'participants');
           setParticipants(updatedParticipants);
           
           // Handle participant changes
@@ -143,7 +152,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
               await peerManager.handleNewParticipant(participant.id);
               announceJoin(participant.name);
             } catch (error) {
-              console.error(`Failed to connect to new participant ${participant.id}:`, error);
+              // Connection failed, continue with other participants
             }
           }
           
@@ -158,17 +167,14 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
             try {
               await peerManager.connectToAllParticipants(updatedParticipants);
             } catch (error) {
-              console.error('Failed to connect to existing participants:', error);
+              // Connection failed, continue
             }
           }
         });
 
         // Subscribe to room updates
         unsubscribeRoomRef.current = signaling.onRoomUpdate(roomData.id, (room) => {
-          if (room) {
-            // Room still exists
-            console.log('Room updated:', room);
-          } else {
+          if (!room) {
             // Room was deleted
             announce('Room has been closed by the host');
             toast.info('Room has been closed');
@@ -178,26 +184,20 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
 
         // Cleanup on unmount
         return () => {
-          console.log('useEffect cleanup running...');
-          
           // Unsubscribe from Firebase listeners
           if (unsubscribeParticipantsRef.current) {
-            console.log('Unsubscribing from participants...');
             unsubscribeParticipantsRef.current();
             unsubscribeParticipantsRef.current = null;
           }
           if (unsubscribeRoomRef.current) {
-            console.log('Unsubscribing from room...');
             unsubscribeRoomRef.current();
             unsubscribeRoomRef.current = null;
           }
           
           // Cleanup WebRTC connections (idempotent)
-          console.log('Cleaning up peer manager...');
           peerManager.cleanup();
         };
       } catch (error) {
-        console.error('Failed to initialize connection:', error);
         announce('Failed to connect to audio bubble');
         toast.error('Failed to connect to audio bubble');
         setConnectionStatus('disconnected');
@@ -246,7 +246,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
       try {
         await signaling.updateParticipantMute(currentParticipant.id, newMutedState);
       } catch (error) {
-        console.error('Failed to update mute status:', error);
+        // Mute status update failed, continue
       }
     }
     
@@ -276,46 +276,34 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   };
 
   const leaveRoom = async () => {
-    console.log('=== LEAVE ROOM STARTED ===');
     announce('Leaving audio bubble');
     vibrate([200, 100, 200, 100, 200]);
     
     try {
-      // STEP 0: Unsubscribe from Firebase listeners FIRST to prevent new connections
-      console.log('STEP 0: Unsubscribing from Firebase listeners...');
+      // Unsubscribe from Firebase listeners FIRST to prevent new connections
       if (unsubscribeParticipantsRef.current) {
         unsubscribeParticipantsRef.current();
         unsubscribeParticipantsRef.current = null;
-        console.log('Unsubscribed from participants');
       }
       if (unsubscribeRoomRef.current) {
         unsubscribeRoomRef.current();
         unsubscribeRoomRef.current = null;
-        console.log('Unsubscribed from room updates');
       }
       
-      // STEP 1: Cleanup WebRTC connections (stops all tracks and closes connections)
-      console.log('STEP 1: Cleaning up WebRTC connections...');
+      // Cleanup WebRTC connections (stops all tracks and closes connections)
       peerManager.cleanup();
-      console.log('WebRTC cleanup completed');
       
-      // STEP 2: Leave room in Firebase
-      console.log('STEP 2: Leaving room in Firebase...');
+      // Leave room in Firebase
       await signaling.leaveRoom();
-      console.log('Left room in Firebase');
       
       toast.info('Left audio bubble');
     } catch (error) {
-      console.error('Failed to leave room:', error);
       toast.error('Error leaving room');
       
       // Ensure cleanup happens even if Firebase fails
-      console.log('Force cleaning up WebRTC connections after error...');
       peerManager.cleanup();
     } finally {
-      console.log('STEP 3: Calling onLeave()...');
       onLeave();
-      console.log('=== LEAVE ROOM COMPLETED ===');
     }
   };
 

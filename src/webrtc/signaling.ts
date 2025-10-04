@@ -71,8 +71,10 @@ class SignalingService {
    */
   async createRoom(roomName: string, settings: RoomData['settings']): Promise<RoomData> {
     try {
+      console.log('🏠 Creating room:', roomName, 'with settings:', settings);
       // Ensure user is authenticated
       if (!authService.isAuthenticated()) {
+        console.log('🔐 User not authenticated, signing in anonymously...');
         await authService.signInAnonymously();
       }
 
@@ -80,9 +82,11 @@ class SignalingService {
       const userId = authService.getCurrentUserId();
       
       if (!userId) {
+        console.error('❌ User not authenticated after sign in');
         throw new Error('User not authenticated');
       }
 
+      console.log('👤 User ID:', userId, 'Room ID:', roomId);
       const roomData: RoomData = {
         id: roomId,
         name: roomName,
@@ -95,15 +99,17 @@ class SignalingService {
       };
 
       // Create room document in Firebase
+      console.log('📝 Saving room to Firebase...');
       const roomRef = doc(db, 'rooms', roomId);
       await setDoc(roomRef, roomData as any);
 
       // Add host as first participant
+      console.log('👑 Adding host as first participant...');
       await this.addParticipant(roomId, userId, 'You', true);
 
       this.currentRoom = roomData;
       this.notifyRoomUpdate();
-
+      console.log('✅ Room created successfully:', roomId);
       return roomData;
     } catch (error) {
       console.error('Failed to create room:', error);
@@ -116,37 +122,46 @@ class SignalingService {
    */
   async joinRoom(roomId: string, participantName: string = 'Participant'): Promise<RoomData> {
     try {
+      console.log('🚪 Joining room:', roomId, 'as:', participantName);
       // Ensure user is authenticated
       if (!authService.isAuthenticated()) {
+        console.log('🔐 User not authenticated, signing in anonymously...');
         await authService.signInAnonymously();
       }
 
       const userId = authService.getCurrentUserId();
       if (!userId) {
+        console.error('❌ User not authenticated after sign in');
         throw new Error('User not authenticated');
       }
 
+      console.log('👤 User ID:', userId);
       // Check if room exists
+      console.log('🔍 Fetching room data from Firebase...');
       const roomRef = doc(db, 'rooms', roomId.toUpperCase());
       const roomSnap = await getDoc(roomRef);
       
       if (!roomSnap.exists()) {
+        console.error('❌ Room not found:', roomId);
         throw new Error('Room not found');
       }
 
       const roomData = { ...roomSnap.data(), id: roomId.toUpperCase() } as RoomData;
+      console.log('📋 Room data retrieved:', roomData.name);
       
       // Check if room is active
       if (!roomData.isActive) {
+        console.error('❌ Room is not active:', roomId);
         throw new Error('Room is no longer active');
       }
       
       // Add participant to room
+      console.log('👥 Adding participant to room...');
       await this.addParticipant(roomId.toUpperCase(), userId, participantName, false);
       
       this.currentRoom = roomData;
       this.notifyRoomUpdate();
-
+      console.log('✅ Successfully joined room:', roomId);
       return roomData;
     } catch (error) {
       console.error('Failed to join room:', error);
@@ -278,11 +293,13 @@ class SignalingService {
    */
   async sendOffer(roomId: string, fromId: string, toId: string, offer: RTCSessionDescriptionInit): Promise<void> {
     try {
+      console.log('📤 Sending offer from', fromId, 'to', toId, 'in room', roomId);
       const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
       await updateDoc(signalingRef, {
         offer,
         timestamp: serverTimestamp()
       }).catch(async () => {
+        console.log('📝 Creating new signaling document for', fromId, 'to', toId);
         // Create document if it doesn't exist
         await addDoc(collection(db, 'rooms', roomId, 'signaling'), {
           id: `${fromId}_${toId}`,
@@ -291,8 +308,9 @@ class SignalingService {
           timestamp: serverTimestamp()
         });
       });
+      console.log('✅ Offer sent successfully');
     } catch (error) {
-      console.error('Failed to send offer:', error);
+      console.error('❌ Failed to send offer:', error);
       throw error;
     }
   }
@@ -302,13 +320,15 @@ class SignalingService {
    */
   async sendAnswer(roomId: string, fromId: string, toId: string, answer: RTCSessionDescriptionInit): Promise<void> {
     try {
+      console.log('📥 Sending answer from', fromId, 'to', toId, 'in room', roomId);
       const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
       await updateDoc(signalingRef, {
         answer,
         timestamp: serverTimestamp()
       });
+      console.log('✅ Answer sent successfully');
     } catch (error) {
-      console.error('Failed to send answer:', error);
+      console.error('❌ Failed to send answer:', error);
       throw error;
     }
   }
@@ -318,11 +338,13 @@ class SignalingService {
    */
   async sendIceCandidate(roomId: string, fromId: string, toId: string, candidate: RTCIceCandidateInit): Promise<void> {
     try {
+      console.log('🧊 Sending ICE candidate from', fromId, 'to', toId, 'in room', roomId);
       const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
       await updateDoc(signalingRef, {
         iceCandidates: arrayUnion(candidate),
         timestamp: serverTimestamp()
       }).catch(async () => {
+        console.log('📝 Creating new signaling document for ICE candidate');
         // Create document if it doesn't exist
         await addDoc(collection(db, 'rooms', roomId, 'signaling'), {
           id: `${fromId}_${toId}`,
@@ -330,8 +352,9 @@ class SignalingService {
           timestamp: serverTimestamp()
         });
       });
+      console.log('✅ ICE candidate sent successfully');
     } catch (error) {
-      console.error('Failed to send ICE candidate:', error);
+      console.error('❌ Failed to send ICE candidate:', error);
       throw error;
     }
   }
