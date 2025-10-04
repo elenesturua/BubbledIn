@@ -312,7 +312,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     peerManager.setMuted(newMutedState);
     
     // Update signaling service
-    const currentParticipant = participants.find(p => p.id === 'host' || p.isHost);
+    const currentParticipant = participants.find(p => p.id === authService.getCurrentUserId());
     if (currentParticipant) {
       try {
         await signaling.updateParticipantMute(currentParticipant.id, newMutedState);

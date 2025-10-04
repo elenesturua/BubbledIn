@@ -502,6 +502,19 @@ class PeerManager {
     peer.ontrack = (event) => {
       const [remoteStream] = event.streams;
       
+      // Check if this is our own stream to prevent echo
+      const isOwnStream = this.localStream && 
+        remoteStream.getAudioTracks().some(track => 
+          this.localStream!.getAudioTracks().some(localTrack => 
+            localTrack.id === track.id
+          )
+        );
+      
+      if (isOwnStream) {
+        // Don't play our own stream - prevents users from hearing themselves
+        return;
+      }
+      
       // Set up audio element
       audioElement.srcObject = remoteStream;
       peerConnection.stream = remoteStream;
