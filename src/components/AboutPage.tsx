@@ -30,7 +30,7 @@ export function AboutPage({ onBack }: AboutPageProps) {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="ml-3 text-2xl font-bold">
-            About Bubbledin
+            About BubbledIn
           </h1>
         </header>
 
@@ -43,7 +43,7 @@ export function AboutPage({ onBack }: AboutPageProps) {
             Clear Communication in Noisy Environments
           </h2>
           <p className="text-base text-gray-600 leading-relaxed">
-            Audio Bubbles creates private audio spaces where
+            BubbledIn creates private audio spaces where
             your team can hear each other perfectly, even in
             loud hackathons, demo expos, and crowded classrooms.
           </p>
@@ -138,30 +138,6 @@ export function AboutPage({ onBack }: AboutPageProps) {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <div className="flex items-start space-x-4">
-              <div
-                className="bg-orange-100 rounded-2xl p-3 shrink-0"
-                role="img"
-                aria-label="Presenter feature icon"
-              >
-                <Volume2
-                  className="h-6 w-6 text-orange-600"
-                  aria-hidden="true"
-                />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-1">
-                  Presenter Mode
-                </h3>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  Boost a speaker's volume for presentations and
-                  demos. Perfect for team pitches where one
-                  person needs to be heard above the rest.
-                </p>
-              </div>
-            </div>
-          </div>
 
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
             <div className="flex items-start space-x-4">

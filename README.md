@@ -10,7 +10,7 @@ This project was originally designed in Figma: https://www.figma.com/design/e3Fa
 - 📱 **QR Code Joining** - Instant room access via QR code scanning
 - 💬 **Live Transcription** - Real-time speech-to-text captions
 - ♿ **Accessibility-First** - WCAG 2.1 AA compliant with full keyboard navigation
-- 🎛️ **Advanced Controls** - Push-to-talk and presenter mode
+- 🎛️ **Advanced Controls** - Push-to-talk functionality
 - 🔒 **Privacy-Focused** - No accounts, no tracking, temporary rooms
 
 ## Setting Up Firebase

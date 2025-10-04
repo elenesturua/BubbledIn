@@ -10,7 +10,6 @@ import {
   Volume2, 
   VolumeX, 
   Radio,
-  Crown,
   KeyRound,
   Hand
 } from 'lucide-react';
@@ -19,22 +18,18 @@ interface AudioControlsProps {
   isMuted: boolean;
   volume: number;
   isPushToTalk: boolean;
-  isPresenterMode: boolean;
   onMuteToggle: () => void;
   onVolumeChange: (volume: number) => void;
   onPushToTalkToggle: (enabled: boolean) => void;
-  onPresenterModeToggle: (enabled: boolean) => void;
 }
 
 export function AudioControls({
   isMuted,
   volume,
   isPushToTalk,
-  isPresenterMode,
   onMuteToggle,
   onVolumeChange,
-  onPushToTalkToggle,
-  onPresenterModeToggle
+  onPushToTalkToggle
 }: AudioControlsProps) {
   const [isTouchPressed, setIsTouchPressed] = useState(false);
   const [wifiStrength, setWifiStrength] = useState<'excellent' | 'good' | 'fair' | 'poor' | 'disconnected'>('good');
@@ -195,36 +190,11 @@ export function AudioControls({
           />
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Crown className="h-5 w-5 text-gray-600" aria-hidden="true" />
-            <div>
-              <Label className="text-base" htmlFor="presenter-mode-switch">Presenter Mode</Label>
-              <p className="text-sm text-gray-500">Boost your voice volume</p>
-            </div>
-          </div>
-          <Switch 
-            id="presenter-mode-switch"
-            checked={isPresenterMode} 
-            onCheckedChange={onPresenterModeToggle}
-            aria-label={`Presenter mode ${isPresenterMode ? 'enabled' : 'disabled'}`}
-          />
-        </div>
-
         {isPushToTalk && (
           <div className="bg-blue-50 p-4 rounded-2xl" role="alert" aria-live="polite">
             <p className="text-sm text-blue-800">
               <Hand className="h-4 w-4 inline mr-2" aria-hidden="true" />
               <span className="font-medium">Push to Talk is active.</span> Touch and hold the microphone button to speak.
-            </p>
-          </div>
-        )}
-
-        {isPresenterMode && (
-          <div className="bg-yellow-50 p-4 rounded-2xl" role="alert" aria-live="polite">
-            <p className="text-sm text-yellow-800">
-              <Crown className="h-4 w-4 inline mr-2" aria-hidden="true" />
-              <span className="font-medium">Presenter Mode active.</span> Your voice is boosted for all participants.
             </p>
           </div>
         )}
