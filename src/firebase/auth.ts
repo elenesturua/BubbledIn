@@ -1,22 +1,17 @@
 /**
- * Firebase Authentication Service
- * Handles user authentication for WebRTC sessions
+ * Firebase Authentication Service  
+ * Handles user authentication for audio bubbles
  */
 
-import { 
-  signInAnonymously, 
-  signOut, 
-  onAuthStateChanged,
-  User 
-} from 'firebase/auth';
+import { signInAnonymously, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from './config';
 
 class AuthService {
-  private currentUser: User | null = null;
-  private authStateCallbacks: ((user: User | null) => void)[] = [];
+  private currentUser: any = null;
+  private authStateCallbacks: Array<(user: any) => void> = [];
 
   constructor() {
-    // Listen for auth state changes
+    // Set up auth state listener
     onAuthStateChanged(auth, (user) => {
       this.currentUser = user;
       this.authStateCallbacks.forEach(callback => callback(user));
@@ -24,34 +19,35 @@ class AuthService {
   }
 
   /**
-   * Sign in anonymously for WebRTC sessions
+   * Sign in anonymously
    */
-  async signInAnonymously(): Promise<User> {
+  async signInAnonymously(): Promise<void> {
     try {
-      const result = await signInAnonymously(auth);
-      return result.user;
+      await signInAnonymously(auth);
+      console.log('✅ Signed in anonymously');
     } catch (error) {
-      console.error('Anonymous sign-in failed:', error);
-      throw new Error('Failed to sign in anonymously');
+      console.error('❌ Anonymous sign-in failed:', error);
+      throw error;
     }
   }
 
   /**
-   * Sign out current user
+   * Sign out
    */
   async signOut(): Promise<void> {
     try {
       await signOut(auth);
+      console.log('✅ Signed out');
     } catch (error) {
-      console.error('Sign out failed:', error);
-      throw new Error('Failed to sign out');
+      console.error('❌ Sign out failed:', error);
+      throw error;
     }
   }
 
   /**
    * Get current user
    */
-  getCurrentUser(): User | null {
+  getCurrentUser(): any {
     return this.currentUser;
   }
 
@@ -65,12 +61,10 @@ class AuthService {
   /**
    * Subscribe to auth state changes
    */
-  onAuthStateChange(callback: (user: User | null) => void): () => void {
+  onAuthStateChange(callback: (user: any) => void): () => void {
     this.authStateCallbacks.push(callback);
     
-    // Call immediately with current state
-    callback(this.currentUser);
-    
+    // Return unsubscribe function
     return () => {
       const index = this.authStateCallbacks.indexOf(callback);
       if (index > -1) {

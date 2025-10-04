@@ -6,16 +6,20 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getAnalytics } from 'firebase/analytics';
 
-// Firebase configuration - replace with your actual config
+// Firebase configuration
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: 'AIzaSyCxGaiQ6YF0imcNLzhwLA408__YoWz6F3o',
+  authDomain: 'bubbledin-c4ff0.firebaseapp.com',
+  projectId: 'bubbledin-c4ff0',
+  storageBucket: 'bubbledin-c4ff0.firebasestorage.app',
+  messagingSenderId: '724646441543',
+  appId: '1:724646441543:web:2697cc9f261ea499e1f762',
+  measurementId: 'G-2NQZ1MVEHK'
 };
+
+console.log('🔥 Firebase configuration loaded successfully!');
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -24,5 +28,16 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
+// Initialize analytics (optional)
+let analytics;
+if (typeof window !== 'undefined') {
+  try {
+    analytics = getAnalytics(app);
+  } catch (error) {
+    console.log('📊 Analytics not available:', error.message);
+  }
+}
+
 // Export the app instance for other uses
 export default app;
+export { analytics };

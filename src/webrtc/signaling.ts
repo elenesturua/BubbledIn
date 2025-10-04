@@ -48,48 +48,42 @@ export interface Participant {
   joinedAt?: any;
 }
 
-export interface SignalingData {
-  offer?: RTCSessionDescriptionInit;
-  answer?: RTCSessionDescriptionInit;
-  iceCandidates: RTCIceCandidateInit[];
-  timestamp: any;
-}
-
 export type ParticipantUpdateCallback = (participants: Participant[]) => void;
 export type RoomUpdateCallback = (room: RoomData | null) => void;
-export type SignalingCallback = (data: SignalingData) => void;
 
 class SignalingService {
-  private participants: Participant[] = [];
-  private onParticipantsCallback?: ParticipantUpdateCallback;
-  private onRoomUpdateCallback?: RoomUpdateCallback;
   private currentRoom: RoomData | null = null;
-  private unsubscribeCallbacks: (() => void)[] = [];
+  private participants: Participant[] = [];
+  private onParticipantsCallback: ParticipantUpdateCallback | null = null;
+  private onRoomCallback: RoomUpdateCallback | null = null;
 
   /**
-   * Create a new room with the given settings
+   * Create a new room
    */
-  async createRoom(roomName: string, settings: RoomData['settings']): Promise<RoomData> {
+  async createRoom(name: string, settings: RoomData['settings']): Promise<RoomData> {
     try {
-      console.log('🏠 Creating room:', roomName, 'with settings:', settings);
+      console.log('🏠 Creating room:', name);
+      
+      // Generate room ID
+      const roomId = this.generateRoomId();
+      
       // Ensure user is authenticated
       if (!authService.isAuthenticated()) {
         console.log('🔐 User not authenticated, signing in anonymously...');
         await authService.signInAnonymously();
       }
 
-      const roomId = this.generateRoomId();
       const userId = authService.getCurrentUserId();
-      
       if (!userId) {
         console.error('❌ User not authenticated after sign in');
         throw new Error('User not authenticated');
       }
 
-      console.log('👤 User ID:', userId, 'Room ID:', roomId);
+      console.log('👤 User ID:', userId);
+
       const roomData: RoomData = {
         id: roomId,
-        name: roomName,
+        name,
         host: true,
         settings,
         url: `${window.location.origin}?room=${roomId}`,
@@ -147,17 +141,15 @@ class SignalingService {
       }
 
       const roomData = { ...roomSnap.data(), id: roomId.toUpperCase() } as RoomData;
-      console.log('📋 Room data retrieved:', roomData.name);
       
-      // Check if room is active
-      if (!roomData.isActive) {
-        console.error('❌ Room is not active:', roomId);
-        throw new Error('Room is no longer active');
+      // Check if user is already a participant
+      const participantRef = doc(db, 'rooms', roomId.toUpperCase(), 'participants', userId);
+      const participantSnap = await getDoc(participantRef);
+      
+      if (!participantSnap.exists()) {
+        // Add participant to room
+        await this.addParticipant(roomId.toUpperCase(), userId, participantName, false);
       }
-      
-      // Add participant to room
-      console.log('👥 Adding participant to room...');
-      await this.addParticipant(roomId.toUpperCase(), userId, participantName, false);
       
       this.currentRoom = roomData;
       this.notifyRoomUpdate();
@@ -170,29 +162,30 @@ class SignalingService {
   }
 
   /**
-   * Leave the current room
+   * Leave current room
    */
   async leaveRoom(): Promise<void> {
-    console.log('Signaling: Leaving room...');
-    
+    if (!this.currentRoom) return;
+
     try {
       const userId = authService.getCurrentUserId();
-      if (userId && this.currentRoom) {
-        const roomId = this.currentRoom.id;
-        
+      if (userId) {
         // Remove participant from Firebase
-        const participantRef = doc(db, 'rooms', roomId, 'participants', userId);
+        const participantRef = doc(db, 'rooms', this.currentRoom.id, 'participants', userId);
         await deleteDoc(participantRef);
         
-        // Check if this was the last participant and mark room as inactive
-        await this.checkAndDeactivateRoom(roomId);
+        // Check if room should be deactivated
+        await this.checkAndDeactivateRoom(this.currentRoom.id);
       }
+      
+      this.currentRoom = null;
+      this.participants = [];
+      this.onParticipantsCallback = null;
+      this.onRoomCallback = null;
+      
+      console.log('✅ Left room successfully');
     } catch (error) {
       console.error('Failed to leave room:', error);
-    } finally {
-      // Always cleanup local state, even if Firebase operations fail
-      console.log('Signaling: Cleaning up local state...');
-      this.cleanup();
     }
   }
 
@@ -252,7 +245,6 @@ class SignalingService {
       }
     );
 
-    this.unsubscribeCallbacks.push(unsubscribe);
     return unsubscribe;
   }
 
@@ -263,15 +255,14 @@ class SignalingService {
     const roomRef = doc(db, 'rooms', roomId);
     
     const unsubscribe = onSnapshot(roomRef, 
-      (snapshot) => {
+      (doc) => {
         try {
-          if (snapshot.exists()) {
-            const roomData = { ...snapshot.data(), id: snapshot.id } as RoomData;
+          if (doc.exists()) {
+            const roomData = { ...doc.data(), id: doc.id } as RoomData;
             this.currentRoom = roomData;
-            this.onRoomUpdateCallback = callback;
+            this.onRoomCallback = callback;
             callback(roomData);
           } else {
-            this.currentRoom = null;
             callback(null);
           }
         } catch (error) {
@@ -280,194 +271,41 @@ class SignalingService {
       },
       (error) => {
         console.error('Error in room subscription:', error);
-        // Don't call callback on error to prevent infinite loops
       }
     );
 
-    this.unsubscribeCallbacks.push(unsubscribe);
     return unsubscribe;
   }
 
   /**
-   * Send WebRTC offer
-   */
-  async sendOffer(roomId: string, fromId: string, toId: string, offer: RTCSessionDescriptionInit): Promise<void> {
-    try {
-      console.log('📤 Sending offer from', fromId, 'to', toId, 'in room', roomId);
-      const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
-      await updateDoc(signalingRef, {
-        offer,
-        timestamp: serverTimestamp()
-      }).catch(async () => {
-        console.log('📝 Creating new signaling document for', fromId, 'to', toId);
-        // Create document if it doesn't exist
-        await addDoc(collection(db, 'rooms', roomId, 'signaling'), {
-          id: `${fromId}_${toId}`,
-          offer,
-          iceCandidates: [],
-          timestamp: serverTimestamp()
-        });
-      });
-      console.log('✅ Offer sent successfully');
-    } catch (error) {
-      console.error('❌ Failed to send offer:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Send WebRTC answer
-   */
-  async sendAnswer(roomId: string, fromId: string, toId: string, answer: RTCSessionDescriptionInit): Promise<void> {
-    try {
-      console.log('📥 Sending answer from', fromId, 'to', toId, 'in room', roomId);
-      const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
-      await updateDoc(signalingRef, {
-        answer,
-        timestamp: serverTimestamp()
-      });
-      console.log('✅ Answer sent successfully');
-    } catch (error) {
-      console.error('❌ Failed to send answer:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Send ICE candidate
-   */
-  async sendIceCandidate(roomId: string, fromId: string, toId: string, candidate: RTCIceCandidateInit): Promise<void> {
-    try {
-      console.log('🧊 Sending ICE candidate from', fromId, 'to', toId, 'in room', roomId);
-      const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
-      await updateDoc(signalingRef, {
-        iceCandidates: arrayUnion(candidate),
-        timestamp: serverTimestamp()
-      }).catch(async () => {
-        console.log('📝 Creating new signaling document for ICE candidate');
-        // Create document if it doesn't exist
-        await addDoc(collection(db, 'rooms', roomId, 'signaling'), {
-          id: `${fromId}_${toId}`,
-          iceCandidates: [candidate],
-          timestamp: serverTimestamp()
-        });
-      });
-      console.log('✅ ICE candidate sent successfully');
-    } catch (error) {
-      console.error('❌ Failed to send ICE candidate:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Listen for signaling data
-   */
-  onSignaling(roomId: string, fromId: string, toId: string, callback: SignalingCallback): () => void {
-    const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
-    
-    const unsubscribe = onSnapshot(signalingRef, 
-      (snapshot) => {
-        try {
-          if (snapshot.exists()) {
-            const data = snapshot.data() as SignalingData;
-            callback(data);
-          }
-        } catch (error) {
-          console.error('Error processing signaling data:', error);
-        }
-      },
-      (error) => {
-        console.error('Error in signaling subscription:', error);
-      }
-    );
-
-    this.unsubscribeCallbacks.push(unsubscribe);
-    return unsubscribe;
-  }
-
-  /**
-   * Listen for all signaling data for a specific user
-   */
-  onAllSignaling(roomId: string, userId: string, callback: (fromId: string, data: SignalingData) => void): () => void {
-    const signalingRef = collection(db, 'rooms', roomId, 'signaling');
-    
-    const unsubscribe = onSnapshot(signalingRef, 
-      (snapshot) => {
-        try {
-          snapshot.docChanges().forEach((change) => {
-            if (change.type === 'added' || change.type === 'modified') {
-              const docId = change.doc.id;
-              // Check if this document is targeting our user (format: fromId_toId)
-              if (docId.endsWith(`_${userId}`)) {
-                const fromId = docId.split('_')[0];
-                if (fromId !== userId) {
-                  const data = change.doc.data() as SignalingData;
-                  callback(fromId, data);
-                }
-              }
-            }
-          });
-        } catch (error) {
-          console.error('Error processing all signaling data:', error);
-        }
-      },
-      (error) => {
-        console.error('Error in all signaling subscription:', error);
-      }
-    );
-
-    this.unsubscribeCallbacks.push(unsubscribe);
-    return unsubscribe;
-  }
-
-  /**
-   * Get current participants
-   */
-  getParticipants(): Participant[] {
-    return [...this.participants];
-  }
-
-  /**
-   * Get current room
+   * Get current room data
    */
   getCurrentRoom(): RoomData | null {
     return this.currentRoom;
   }
 
   /**
-   * Cleanup all subscriptions - idempotent and safe to call multiple times
+   * Get current participants
    */
-  cleanup(): void {
-    console.log('Signaling: Starting cleanup...');
-    
-    // Check if already cleaned up
-    if (this.unsubscribeCallbacks.length === 0 && !this.currentRoom && this.participants.length === 0) {
-      console.log('Signaling: Already cleaned up, skipping');
-      return;
-    }
-    
-    // Unsubscribe from all Firebase listeners
-    this.unsubscribeCallbacks.forEach((unsubscribe, index) => {
-      try {
-        unsubscribe();
-        console.log(`Signaling: Unsubscribed listener ${index + 1}`);
-      } catch (error) {
-        console.warn(`Signaling: Error unsubscribing listener ${index + 1}:`, error);
-      }
-    });
-    this.unsubscribeCallbacks = [];
-    
-    // Clear callbacks to prevent further notifications
-    this.onParticipantsCallback = undefined;
-    this.onRoomUpdateCallback = undefined;
-    
-    // Reset state
-    this.participants = [];
-    this.currentRoom = null;
-    
-    console.log('Signaling: Cleanup completed');
+  getParticipants(): Participant[] {
+    return this.participants;
   }
 
+  /**
+   * Generate a room ID
+   */
+  private generateRoomId(): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+
+  /**
+   * Add a participant to a room
+   */
   private async addParticipant(roomId: string, userId: string, name: string, isHost: boolean): Promise<void> {
     const participantData: Participant = {
       id: userId,
@@ -488,34 +326,29 @@ class SignalingService {
    */
   private async checkAndDeactivateRoom(roomId: string): Promise<void> {
     try {
-      // Query the participants collection to check if empty
       const participantsRef = collection(db, 'rooms', roomId, 'participants');
       const participantsSnapshot = await getDocs(participantsRef);
       
       if (participantsSnapshot.empty) {
-        // No participants left, mark room as inactive
+        // Mark room as inactive
         const roomRef = doc(db, 'rooms', roomId);
-        await updateDoc(roomRef, { isActive: false });
-        console.log(`Room ${roomId} marked as inactive - no participants remaining`);
+        await updateDoc(roomRef, { 
+          isActive: false,
+          endedAt: serverTimestamp()
+        });
+        console.log('🏠 Room marked as inactive:', roomId);
       }
     } catch (error) {
-      console.error('Failed to check/deactivate room:', error);
+      console.error('Error checking room deactivation:', error);
     }
   }
 
-  private generateRoomId(): string {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-  }
-
-  private notifyParticipants(): void {
-    if (this.onParticipantsCallback) {
-      this.onParticipantsCallback([...this.participants]);
-    }
-  }
-
+  /**
+   * Notify listeners of room updates
+   */
   private notifyRoomUpdate(): void {
-    if (this.onRoomUpdateCallback) {
-      this.onRoomUpdateCallback(this.currentRoom);
+    if (this.onRoomCallback && this.currentRoom) {
+      this.onRoomCallback(this.currentRoom);
     }
   }
 }
