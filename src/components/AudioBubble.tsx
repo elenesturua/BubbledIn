@@ -6,7 +6,6 @@ import { AudioControls } from './AudioControls';
 import { ParticipantsList } from './ParticipantsList';
 import { TranscriptionPanel } from './TranscriptionPanel';
 import { StatusAnnouncer, useStatusAnnouncer } from './StatusAnnouncer';
-import { WebRTCDebugger } from './WebRTCDebugger';
 import { 
   Volume2, 
   VolumeX, 
@@ -411,8 +410,6 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
       {/* Status Announcer for accessibility */}
       <StatusAnnouncer message={message} />
       
-      {/* WebRTC Debugger */}
-      <WebRTCDebugger />
       
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 shadow-sm" role="banner">
@@ -633,8 +630,6 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         </div>
       </nav>
 
-      {/* Development debugger */}
-      {process.env.NODE_ENV === 'development' && <WebRTCDebugger />}
     </div>
   );
 }

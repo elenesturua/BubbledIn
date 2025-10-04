@@ -166,11 +166,11 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
             
             <Button 
               onClick={onBack}
-              variant="outline" 
-              className="w-full h-12 rounded-2xl border-2"
+              variant="ghost" 
+              className="w-full h-12 rounded-2xl text-gray-600 hover:text-gray-800"
               size="lg"
             >
-              Back to Create New Room
+              Create Another Room
             </Button>
           </div>
         </div>
