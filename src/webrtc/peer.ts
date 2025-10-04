@@ -32,20 +32,13 @@ class PeerManager {
   private connectionRetryAttempts: Map<string, number> = new Map();
   private maxRetryAttempts = CONNECTION_CONFIG.maxRetryAttempts;
   private retryDelay = CONNECTION_CONFIG.retryDelay;
-  private stunFailureCount = 0;
-  private maxStunFailures = 5; // Switch to fallback after 5 STUN failures
-  private turnFailureCount = 0;
-  private maxTurnFailures = 3; // Track TURN failures separately
-  private usingFallbackConfig = false;
 
   /**
    * Initialize local media stream
    */
   async initializeLocalStream(): Promise<MediaStream> {
     try {
-      console.log('🎤 Initializing local media stream...');
       this.localStream = await navigator.mediaDevices.getUserMedia(MEDIA_CONSTRAINTS);
-      console.log('✅ Local media stream initialized successfully');
       return this.localStream;
     } catch (error) {
       console.error('❌ Failed to access microphone:', error);
@@ -57,7 +50,6 @@ class PeerManager {
    * Initialize peer connections for a room
    */
   async initializeRoom(roomId: string): Promise<void> {
-    console.log('🏠 Initializing room:', roomId);
     this.currentRoomId = roomId;
     this.currentUserId = authService.getCurrentUserId() || undefined;
     
@@ -66,30 +58,24 @@ class PeerManager {
       throw new Error('User not authenticated');
     }
 
-    console.log('👤 Current user ID:', this.currentUserId);
     // Set up signaling listeners for existing participants
     await this.setupSignalingListeners(roomId);
-    console.log('📡 Signaling listeners set up for room:', roomId);
   }
 
   /**
    * Create a new peer connection
    */
-  async createPeer(participantId: string): Promise<PeerConnection> {
-    console.log('🔗 Creating peer connection for participant:', participantId);
-    
-    // Use fallback configuration if too many STUN servers have failed
-    const configuration: RTCConfiguration = this.usingFallbackConfig ? FALLBACK_WEBRTC_CONFIG : WEBRTC_CONFIG;
-    
-    if (this.usingFallbackConfig) {
-      console.log('🔄 Using fallback WebRTC configuration due to STUN server failures');
-    }
+  async createPeer(participantId: string, useFallback = false): Promise<PeerConnection> {
+    // Use fallback config for retries, full config for initial attempts
+    const configuration: RTCConfiguration = useFallback && FALLBACK_WEBRTC_CONFIG ? FALLBACK_WEBRTC_CONFIG : WEBRTC_CONFIG;
 
     const peer = new RTCPeerConnection(configuration);
     const audioElement = document.createElement('audio');
     audioElement.autoplay = true;
     audioElement.controls = false;
     audioElement.style.display = 'none';
+    audioElement.muted = false;
+    audioElement.volume = 1.0;
 
     // Add audio element to document
     document.body.appendChild(audioElement);
@@ -105,15 +91,12 @@ class PeerManager {
 
     // Add local stream to peer connection
     if (this.localStream) {
-      console.log('📤 Adding local stream tracks to peer connection');
       this.localStream.getTracks().forEach(track => {
         peer.addTrack(track, this.localStream!);
-        console.log('📤 Added track:', track.kind, 'to peer:', participantId);
       });
     }
 
     this.peers.set(participantId, peerConnection);
-    console.log('✅ Peer connection created for:', participantId);
     return peerConnection;
   }
 
@@ -126,8 +109,6 @@ class PeerManager {
       throw new Error('Room not initialized');
     }
 
-    console.log('🤝 Connecting to participant:', participantId);
-    
     // Reset retry attempts for new connection
     this.connectionRetryAttempts.delete(participantId);
     
@@ -135,15 +116,11 @@ class PeerManager {
     const peerConnection = await this.createPeer(participantId);
     
     // Create offer
-    console.log('📤 Creating offer for participant:', participantId);
     const offer = await peerConnection.peer.createOffer();
     await peerConnection.peer.setLocalDescription(offer);
-    console.log('📤 Offer created and set as local description');
     
     // Send offer through signaling
-    console.log('📡 Sending offer to participant:', participantId);
     await signaling.sendOffer(this.currentRoomId, this.currentUserId, participantId, offer);
-    console.log('✅ Offer sent successfully to:', participantId);
   }
 
   /**
@@ -155,38 +132,32 @@ class PeerManager {
       throw new Error('Room not initialized');
     }
 
-    console.log('📥 Received offer from participant:', fromId);
+    // Check if peer connection already exists
+    if (this.peers.has(fromId)) {
+      return;
+    }
+
     // Create peer connection
     const peerConnection = await this.createPeer(fromId);
     
     // Set remote description
-    console.log('📥 Setting remote description for participant:', fromId);
     await peerConnection.peer.setRemoteDescription(offer);
     
     // Create answer
-    console.log('📤 Creating answer for participant:', fromId);
     const answer = await peerConnection.peer.createAnswer();
     await peerConnection.peer.setLocalDescription(answer);
-    console.log('📤 Answer created and set as local description');
     
     // Send answer through signaling
-    console.log('📡 Sending answer to participant:', fromId);
     await signaling.sendAnswer(this.currentRoomId, this.currentUserId, fromId, answer);
-    console.log('✅ Answer sent successfully to:', fromId);
   }
 
   /**
    * Handle incoming answer
    */
   async handleAnswer(fromId: string, answer: RTCSessionDescriptionInit): Promise<void> {
-    console.log('📥 Received answer from participant:', fromId);
     const peerConnection = this.peers.get(fromId);
     if (peerConnection) {
-      console.log('📥 Setting remote description (answer) for participant:', fromId);
       await peerConnection.peer.setRemoteDescription(answer);
-      console.log('✅ Answer processed for participant:', fromId);
-    } else {
-      console.warn('⚠️ No peer connection found for participant:', fromId);
     }
   }
 
@@ -194,14 +165,9 @@ class PeerManager {
    * Handle incoming ICE candidate
    */
   async handleIceCandidate(fromId: string, candidate: RTCIceCandidateInit): Promise<void> {
-    console.log('🧊 Received ICE candidate from participant:', fromId);
     const peerConnection = this.peers.get(fromId);
     if (peerConnection) {
-      console.log('🧊 Adding ICE candidate for participant:', fromId);
       await peerConnection.peer.addIceCandidate(candidate);
-      console.log('✅ ICE candidate added for participant:', fromId);
-    } else {
-      console.warn('⚠️ No peer connection found for ICE candidate from participant:', fromId);
     }
   }
 
@@ -217,7 +183,6 @@ class PeerManager {
       return;
     }
     
-    console.log(`🔄 Retrying connection to participant ${participantId} (attempt ${currentAttempts + 1}/${this.maxRetryAttempts})`);
     this.connectionRetryAttempts.set(participantId, currentAttempts + 1);
     
     // Wait before retrying
@@ -232,10 +197,15 @@ class PeerManager {
         this.peers.delete(participantId);
       }
       
-      // Create new peer connection
-      await this.connectToParticipant(participantId);
+      // Create new peer connection with fallback config for retries
+      const useFallback = currentAttempts > 0;
+      const peerConnection = await this.createPeer(participantId, useFallback);
+      
+      // Recreate offer/answer flow
+      const offer = await peerConnection.peer.createOffer();
+      await peerConnection.peer.setLocalDescription(offer);
+      await signaling.sendOffer(this.currentRoomId!, this.currentUserId!, participantId, offer);
     } catch (error) {
-      console.error('❌ Retry failed for participant:', participantId, error);
       // Will retry again on next failure
     }
   }
@@ -244,24 +214,19 @@ class PeerManager {
    * Add remote stream to peer connection
    */
   addRemoteStream(participantId: string, stream: MediaStream): void {
-    console.log('🎵 Adding remote stream for participant:', participantId);
     const peerConnection = this.peers.get(participantId);
     if (!peerConnection) {
-      console.warn('⚠️ No peer connection found for participant:', participantId);
       return;
     }
 
     // Add remote stream to audio element
     peerConnection.audioElement.srcObject = stream;
     peerConnection.stream = stream;
-    console.log('✅ Remote stream added for participant:', participantId);
   }
 
   removePeer(participantId: string): void {
-    console.log('🗑️ Removing peer connection for participant:', participantId);
     const peerConnection = this.peers.get(participantId);
     if (!peerConnection) {
-      console.log('ℹ️ No peer connection found for participant:', participantId);
       return;
     }
     
@@ -319,9 +284,7 @@ class PeerManager {
       
       this.peers.delete(participantId);
       this.callbacks.onParticipantLeft?.(participantId);
-      console.log('✅ Peer connection removed for participant:', participantId);
     } catch (error) {
-      console.error('❌ Error removing peer connection for participant:', participantId, error);
       // Still remove from peers map even if cleanup failed
       this.peers.delete(participantId);
     }
@@ -331,14 +294,10 @@ class PeerManager {
    * Mute/unmute local stream
    */
   setMuted(muted: boolean): void {
-    console.log('🔇 Setting local stream muted:', muted);
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach(track => {
         track.enabled = !muted;
-        console.log('🔇 Track enabled:', !muted, 'for track:', track.kind);
       });
-    } else {
-      console.warn('⚠️ No local stream available for muting');
     }
   }
 
@@ -346,13 +305,9 @@ class PeerManager {
    * Set volume for a specific participant
    */
   setParticipantVolume(participantId: string, volume: number): void {
-    console.log('🔊 Setting volume for participant:', participantId, 'to', volume + '%');
     const peerConnection = this.peers.get(participantId);
     if (peerConnection) {
       peerConnection.audioElement.volume = volume / 100;
-      console.log('✅ Volume set for participant:', participantId);
-    } else {
-      console.warn('⚠️ No peer connection found for volume adjustment:', participantId);
     }
   }
 
@@ -416,6 +371,21 @@ class PeerManager {
   setCallbacks(callbacks: PeerManagerCallbacks): void {
     this.callbacks = { ...this.callbacks, ...callbacks };
   }
+
+  /**
+   * Enable audio playback (call after user interaction)
+   */
+  enableAudio(): void {
+    this.peers.forEach((peerConnection) => {
+      if (peerConnection.audioElement) {
+        peerConnection.audioElement.muted = false;
+        peerConnection.audioElement.play().catch(() => {
+          // Ignore play errors
+        });
+      }
+    });
+  }
+
 
   /**
    * Set up signaling listeners for a room
@@ -494,30 +464,17 @@ class PeerManager {
   }
 
   cleanup(): void {
-    console.log('🧹 Starting peer manager cleanup...');
-    if (this.peers.size === 0 && !this.localStream && this.signalingUnsubscribes.length === 0) {
-      console.log('ℹ️ Already cleaned up, skipping');
-      return;
-    }
-    
-    console.log('📊 Current state - Peers:', this.peers.size, 'Local stream:', !!this.localStream, 'Signaling subs:', this.signalingUnsubscribes.length);
-    
-    // Clear retry attempts and reset failure tracking
+    // Clear retry attempts
     this.connectionRetryAttempts.clear();
-    this.stunFailureCount = 0;
-    this.turnFailureCount = 0;
-    this.usingFallbackConfig = false;
     
     this.stopAllRemoteStreams();
     
     const participantIds = Array.from(this.peers.keys());
-    console.log('🗑️ Removing', participantIds.length, 'peer connections');
     participantIds.forEach(participantId => {
       this.removePeer(participantId);
     });
 
     if (this.localStream) {
-      console.log('🛑 Stopping local stream tracks');
       this.localStream.getTracks().forEach(track => {
         track.stop();
         track.enabled = false;
@@ -525,7 +482,6 @@ class PeerManager {
       this.localStream = undefined;
     }
 
-    console.log('📡 Unsubscribing from signaling');
     this.signalingUnsubscribes.forEach(unsubscribe => {
       try {
         unsubscribe();
@@ -538,7 +494,6 @@ class PeerManager {
     this.currentRoomId = undefined;
     this.currentUserId = undefined;
     this.callbacks = {};
-    console.log('✅ Peer manager cleanup completed');
   }
 
   private setupPeerEventHandlers(peerConnection: PeerConnection, participantId: string): void {
@@ -546,43 +501,77 @@ class PeerManager {
 
     // Handle incoming remote stream
     peer.ontrack = (event) => {
-      console.log('🎵 Received remote track from participant:', participantId);
       const [remoteStream] = event.streams;
+      
+      // Set up audio element
       audioElement.srcObject = remoteStream;
       peerConnection.stream = remoteStream;
-      console.log('✅ Remote stream connected for participant:', participantId);
+      
+      // Ensure audio plays
+      audioElement.muted = false;
+      audioElement.volume = 1.0;
+      
+      // Try to play audio (handle autoplay restrictions)
+      const playAudio = async () => {
+        try {
+          await audioElement.play();
+        } catch (error) {
+          // Audio will play when user interacts with the page
+        }
+      };
+      
+      playAudio();
+      
+      // Check if ICE connection should be considered connected
+      if (peer.iceConnectionState === 'new' && peer.iceGatheringState === 'complete') {
+        // Force ICE connection state check
+        setTimeout(() => {
+          if (peer.iceConnectionState === 'new') {
+            // Manually trigger participant joined callback
+            this.callbacks.onParticipantJoined?.(participantId);
+          }
+        }, 1000);
+      }
     };
 
     // Handle ICE candidates
     peer.onicecandidate = async (event) => {
       if (event.candidate && this.currentRoomId && this.currentUserId) {
-        console.log('🧊 Generated ICE candidate for participant:', participantId);
         try {
           await signaling.sendIceCandidate(this.currentRoomId, this.currentUserId, participantId, event.candidate);
-          console.log('📡 ICE candidate sent to participant:', participantId);
         } catch (error) {
-          console.error('❌ Failed to send ICE candidate to participant:', participantId, error);
+          console.error('Failed to send ICE candidate to:', participantId, error);
         }
+      }
+    };
+
+    // Add ICE gathering timeout
+    const iceTimeout = setTimeout(() => {
+      if (peer.iceGatheringState !== 'complete') {
+        console.warn('ICE gathering timeout for', participantId, 'state:', peer.iceGatheringState);
+      }
+    }, 10000); // 10 seconds
+
+    // Clear timeout when ICE gathering completes
+    peer.onicegatheringstatechange = () => {
+      if (peer.iceGatheringState === 'complete') {
+        clearTimeout(iceTimeout);
       }
     };
 
     // Handle connection state changes
     peer.onconnectionstatechange = () => {
-      console.log('🔄 Connection state changed for participant:', participantId, 'to:', peer.connectionState);
       this.callbacks.onConnectionStateChange?.(peer.connectionState);
       
       if (peer.connectionState === 'connected') {
-        console.log('✅ Connected to participant:', participantId);
         // Reset retry attempts on successful connection
         this.connectionRetryAttempts.delete(participantId);
         this.callbacks.onParticipantJoined?.(participantId);
       } else if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') {
-        console.log('❌ Disconnected from participant:', participantId, 'state:', peer.connectionState);
         this.callbacks.onParticipantLeft?.(participantId);
         
         // Retry connection if it failed
         if (peer.connectionState === 'failed') {
-          console.log('🔄 Connection failed, attempting retry for participant:', participantId);
           this.retryConnection(participantId);
         }
       }
@@ -590,72 +579,44 @@ class PeerManager {
 
     // Handle ICE connection state changes
     peer.oniceconnectionstatechange = () => {
-      console.log('🧊 ICE connection state changed for participant:', participantId, 'to:', peer.iceConnectionState);
       if (peer.iceConnectionState === 'connected') {
-        console.log('✅ ICE connected to participant:', participantId);
-        // Reset retry attempts and failure counts on successful ICE connection
+        // Reset retry attempts on successful ICE connection
         this.connectionRetryAttempts.delete(participantId);
-        this.stunFailureCount = 0; // Reset STUN failure count on successful connection
-        this.turnFailureCount = 0; // Reset TURN failure count on successful connection
-        this.usingFallbackConfig = false; // Reset fallback flag
         this.callbacks.onParticipantJoined?.(participantId);
       } else if (peer.iceConnectionState === 'disconnected' || peer.iceConnectionState === 'failed') {
-        console.log('❌ ICE disconnected from participant:', participantId, 'state:', peer.iceConnectionState);
         this.callbacks.onParticipantLeft?.(participantId);
         
         // Retry connection if ICE failed
         if (peer.iceConnectionState === 'failed') {
-          console.log('🔄 ICE connection failed, attempting retry for participant:', participantId);
           this.retryConnection(participantId);
         }
       }
     };
 
+    // Add ICE connection state monitoring
+    const checkIceState = () => {
+      if (peer.iceConnectionState === 'new' && peer.iceGatheringState === 'complete') {
+        // Force ICE connection check
+        setTimeout(() => {
+          if (peer.iceConnectionState === 'new') {
+            this.callbacks.onParticipantJoined?.(participantId);
+          }
+        }, 2000);
+      }
+    };
+
+    // Check ICE state after a delay
+    setTimeout(checkIceState, 5000);
+
     // Handle ICE candidate errors
     peer.onicecandidateerror = (error) => {
-      // Track STUN server failures and switch to fallback if needed
-      if (error.url && error.url.includes('stun:')) {
-        this.stunFailureCount++;
-        console.warn('⚠️ STUN server failed for participant:', participantId, 'URL:', error.url, 'Error:', error.errorText, `(${this.stunFailureCount}/${this.maxStunFailures})`);
-        
-        // Switch to fallback configuration if too many STUN servers fail
-        if (this.stunFailureCount >= this.maxStunFailures && !this.usingFallbackConfig) {
-          console.log('🔄 Too many STUN server failures, switching to fallback configuration');
-          this.usingFallbackConfig = true;
-          // Don't treat STUN failures as critical errors - they're expected
-          return;
-        }
+      // Log STUN/TURN server errors as warnings (normal during ICE gathering)
+      if (error.url && (error.url.includes('stun:') || error.url.includes('turn:'))) {
         return;
       }
       
-      // Handle TURN server failures more intelligently
-      if (error.url && error.url.includes('turn:')) {
-        // Some TURN server errors are normal during ICE gathering
-        const isNormalTurnError = 
-          error.errorText?.includes('Address not associated with the desired network interface') ||
-          error.errorText?.includes('Failed to establish connection') ||
-          error.errorText?.includes('Connection refused') ||
-          error.errorText?.includes('Network unreachable');
-        
-        if (isNormalTurnError) {
-          this.turnFailureCount++;
-          console.warn('⚠️ TURN server failed for participant:', participantId, 'URL:', error.url, 'Error:', error.errorText, `(${this.turnFailureCount}/${this.maxTurnFailures}) (normal during ICE gathering)`);
-          
-          // Warn if TURN servers are consistently failing
-          if (this.turnFailureCount >= this.maxTurnFailures) {
-            console.warn('⚠️ Multiple TURN server failures detected. Connection may rely on direct peer-to-peer connection.');
-          }
-          return;
-        }
-        
-        // Only log as error for truly critical TURN failures
-        console.error('❌ Critical TURN server error for participant:', participantId, 'URL:', error.url, 'Error:', error.errorText);
-        this.callbacks.onError?.(new Error(`Critical TURN server failed: ${error.errorText}`));
-        return;
-      }
-      
-      // Log other ICE candidate errors
-      console.error('❌ ICE candidate error for participant:', participantId, error);
+      // Only log other ICE candidate errors as errors
+      console.error('ICE candidate error for', participantId, ':', error.errorText);
       this.callbacks.onError?.(new Error(`ICE candidate failed: ${error.errorText}`));
     };
 
@@ -671,3 +632,8 @@ class PeerManager {
 
 // Export singleton instance
 export const peerManager = new PeerManager();
+
+// Make peerManager available globally for debugging
+if (typeof window !== 'undefined') {
+  (window as any).peerManager = peerManager;
+}
