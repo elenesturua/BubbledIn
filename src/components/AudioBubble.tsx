@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { AudioControls } from './AudioControls';
 import { ParticipantsList } from './ParticipantsList';
-import { TranscriptionPanel } from './TranscriptionPanel';
+import { SmartTranscriptionPanel } from './SmartTranscriptionPanel';
 import { StatusAnnouncer, useStatusAnnouncer } from './StatusAnnouncer';
 import { 
   Volume2, 
@@ -512,7 +512,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
                 <h2 className="font-semibold" id="captions-heading">Live Captions</h2>
               </div>
               <div aria-labelledby="captions-heading">
-                <TranscriptionPanel stream={stream} userId={userId} />
+                <SmartTranscriptionPanel stream={stream} userId={userId} />
               </div>
             </div>
           </div>

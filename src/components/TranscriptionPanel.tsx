@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Download, Copy, Share2, Mic } from 'lucide-react';
 import { toast } from 'sonner';
+import { smartTranscription } from '../services/SmartTranscription';
 
 interface TranscriptionEntry {
   id: string;
@@ -11,46 +12,54 @@ interface TranscriptionEntry {
   text: string;
   timestamp: string;
   confidence: number;
+  source?: 'web-speech' | 'gemini' | 'hybrid';
 }
 
-export function TranscriptionPanel() {
+export function TranscriptionPanel({ stream, userId }: { stream: MediaStream | null; userId: string }) {
   const [transcripts, setTranscripts] = useState<TranscriptionEntry[]>([]);
   const [isListening, setIsListening] = useState(true);
   const [currentSpeaker, setCurrentSpeaker] = useState<string>('');
   const [isSomeoneSpeaking, setIsSomeoneSpeaking] = useState(false);
+  const [status, setStatus] = useState<'started' | 'stopped' | 'listening'>('stopped');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Mock transcription data
-  const mockTranscripts: TranscriptionEntry[] = [
-    {
-      id: '1',
-      speaker: 'Alex Chen',
-      text: 'Hi everyone, welcome to our project demo. Today we\'ll be presenting our solution for improving accessibility in loud environments.',
-      timestamp: '10:32 AM',
-      confidence: 0.95
-    },
-    {
-      id: '2', 
-      speaker: 'You',
-      text: 'Thanks Alex. Let me start by explaining the problem we identified during HackMIT.',
-      timestamp: '10:33 AM',
-      confidence: 0.92
-    },
-    {
-      id: '3',
-      speaker: 'Sarah Kim',
-      text: 'The background noise here is really challenging, but our audio bubble technology helps filter it out.',
-      timestamp: '10:34 AM',
-      confidence: 0.88
-    },
-    {
-      id: '4',
-      speaker: 'Alex Chen',
-      text: 'As you can see, the real-time transcription is working perfectly even in this noisy environment.',
-      timestamp: '10:35 AM',
-      confidence: 0.94
+  // Auto-scroll to bottom when new transcripts arrive
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  ];
+  }, [transcripts]);
+
+  // Initialize smart transcription service
+  useEffect(() => {
+    smartTranscription.setCallbacks({
+      onTranscription: (entry: TranscriptionEntry) => {
+        console.log('📝 Received transcription:', entry);
+        setTranscripts(prev => [...prev, entry]);
+      },
+      onError: (error: string) => {
+        console.error('❌ Transcription error:', error);
+        toast.error(`Transcription error: ${error}`);
+      },
+      onStatusChange: (newStatus: 'started' | 'stopped' | 'listening') => {
+        console.log('📢 Transcription status changed:', newStatus);
+        setStatus(newStatus);
+      }
+    });
+
+    return () => {
+      smartTranscription.destroy();
+    };
+  }, []);
+
+  // Start/stop listening based on isListening state
+  useEffect(() => {
+    if (isListening && status === 'stopped') {
+      smartTranscription.startListening();
+    } else if (!isListening && status !== 'stopped') {
+      smartTranscription.stopListening();
+    }
+  }, [isListening, status]);
 
   // Simulate speech detection and transcription
   useEffect(() => {
