@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { QrScanner } from "@yudiel/react-qr-scanner";
+import { Scanner } from "@yudiel/react-qr-scanner";
 import { Button } from "./ui/button";
 import { X } from "lucide-react";
 import { toast } from "sonner";
@@ -12,19 +12,21 @@ interface QRCodeScannerProps {
 export function QRCodeScanner({ onQRCodeScanned, onClose }: QRCodeScannerProps) {
   const [error, setError] = useState<string | null>(null);
 
-  const handleScan = (result: any) => {
-    if (result?.[0]) {
-      const data = result[0].rawValue;
+  const handleScan = (detected: any[]) => {
+    if (detected && detected.length > 0) {
+      // The scanner returns an array of detected barcodes. Try to read the first detected value.
+      const first = detected[0];
+      const data = first?.rawValue || first?.rawText || (typeof first === 'string' ? first : undefined);
 
-      if (data.includes("?room=") || data.includes("/room/")) {
-        toast.success("Room QR code detected!");
-        onQRCodeScanned(data);
-      } else {
-        setError("❌ Invalid QR code");
-        //toast.error("Invalid QR code");
-
-        // Auto-clear after 3 seconds
-        setTimeout(() => setError(null), 3000);
+      if (typeof data === 'string') {
+        if (data.includes("?room=") || data.includes("/room/")) {
+          toast.success("Room QR code detected!");
+          onQRCodeScanned(data);
+        } else {
+          setError("❌ Invalid QR code");
+          // Auto-clear after 3 seconds
+          setTimeout(() => setError(null), 3000);
+        }
       }
     }
   };
@@ -43,13 +45,12 @@ export function QRCodeScanner({ onQRCodeScanned, onClose }: QRCodeScannerProps) 
 
         {/* QR Scanner */}
         <div className="aspect-square rounded-2xl overflow-hidden mb-4">
-          <QrScanner
-            constraints={{ facingMode: "environment" }}
-            onDecode={(result) => handleScan(result)}
-            onError={(error) => console.log(error)}
-            containerStyle={{ width: "100%", height: "100%" }}
-            videoStyle={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
+            <Scanner
+              constraints={{ facingMode: "environment" }}
+              onScan={(result) => handleScan(result)}
+              onError={(error) => console.log(error)}
+              allowMultiple={false}
+            />
         </div>
 
         {/* Error display */}
