@@ -5,6 +5,7 @@ import { Badge } from './ui/badge';
 import { AudioControls } from './AudioControls';
 import { ParticipantsList } from './ParticipantsList';
 import { TranscriptionPanel } from './TranscriptionPanel';
+import { WebRTCDebugger } from './WebRTCDebugger';
 import { 
   Volume2, 
   VolumeX, 
@@ -19,7 +20,11 @@ import {
   MicOff,
   MoreVertical
 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+import { signaling } from '../webrtc/signaling';
+import { authService } from '../firebase/auth';
+import { peerManager } from '../webrtc/peer';
+import { pttManager } from '../webrtc/ptt';
 
 interface AudioBubbleProps {
   roomData: any;
@@ -33,13 +38,13 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const [isPushToTalk, setIsPushToTalk] = useState(roomData.settings?.pushToTalk || false);
   const [isPresenterMode, setIsPresenterMode] = useState(roomData.settings?.presenterMode || false);
   const [showTranscription, setShowTranscription] = useState(false);
-  const [participants, setParticipants] = useState([
-    { id: '1', name: 'You', isHost: roomData.host, isMuted: false, isPresenter: roomData.host },
-    { id: '2', name: 'Alex Chen', isHost: false, isMuted: false, isPresenter: false },
-    { id: '3', name: 'Sarah Kim', isHost: false, isMuted: true, isPresenter: false },
-  ]);
+  const [participants, setParticipants] = useState([]);
 
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  
+  // Refs for cleanup
+  const participantsUnsubscribeRef = useRef<(() => void) | null>(null);
+  const roomUnsubscribeRef = useRef<(() => void) | null>(null);
   
   // Simple accessibility helpers
   const announce = (message: string) => {
@@ -56,20 +61,141 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   };
 
   useEffect(() => {
-    // Announce room entry
-    announce(`Joining audio bubble: ${roomData.name}. Connecting to audio...`);
-    
-    // Simulate connection process
-    const timer = setTimeout(() => {
-      setIsConnected(true);
-      setConnectionStatus('connected');
-      announce('Successfully connected to audio bubble. You can now communicate with other participants.');
-      vibrate([200, 100, 200]);
-      toast.success('Connected to audio bubble!');
-    }, 2000);
+    let isCleanupCalled = false;
 
-    return () => clearTimeout(timer);
-  }, [roomData.name, announce, vibrate]);
+    const initializeWebRTC = async () => {
+      try {
+        console.log(' 🎤 Initializing WebRTC for room:', roomData.id);
+        announce(`Joining audio bubble: ${roomData.name}. Connecting to audio...`);
+        setConnectionStatus('connecting');
+
+        // Initialize Firebase authentication first
+        try {
+          await authService.signInAnonymously();
+          console.log('✅ Firebase authentication initialized');
+        } catch (authError) {
+          console.warn('⚠️ Firebase auth failed, continuing in guest mode:', authError);
+          // Continue without auth - WebRTC can work without Firebase for basic functionality
+        }
+
+        // Initialize local media stream (this will request microphone permission)
+        try {
+          await peerManager.initializeLocalStream();
+          console.log('✅ Local media stream initialized');
+        } catch (mediaError) {
+          console.error('❌ Failed to access microphone:', mediaError);
+          announce('Microphone access denied. Audio features will be limited.');
+          toast.error('Microphone access required for audio features');
+          // Continue anyway but mute by default
+          setIsMuted(true);
+        }
+
+        // Initialize room
+        await peerManager.initializeRoom(roomData.id);
+        console.log('✅ Room initialized');
+
+        // Set up peer manager callbacks
+        peerManager.setCallbacks({
+          onConnectionStateChange: (state) => {
+            console.log('🔗 Connection state changed:', state);
+            if (state === 'connected') {
+              setIsConnected(true);
+              setConnectionStatus('connected');
+              announce('Successfully connected to audio bubble. You can now communicate with other participants.');
+              vibrate([200, 100, 200]);
+              toast.success('Connected to audio bubble!');
+            }
+          },
+          onParticipantJoined: (participantId) => {
+            console.log('👥 Participant joined:', participantId);
+            announce(`New participant joined the room`);
+          },
+          onParticipantLeft: (participantId) => {
+            console.log('👥 Participant left:', participantId);
+            announce(`Participant left the room`);
+          },
+          onError: (error) => {
+            console.error('❌ Peer manager error:', error);
+            toast.error('Connection error: ' + error.message);
+          }
+        });
+
+        // Subscribe to participants updates
+        participantsUnsubscribeRef.current = signaling.onParticipants(roomData.id, (participantsList) => {
+          console.log('👥 Participants updated:', participantsList);
+          setParticipants(participantsList);
+
+          // Connect to new participants
+          peerManager.connectToAllParticipants(participantsList);
+        });
+
+        // Subscribe to room updates
+        roomUnsubscribeRef.current = signaling.onRoomUpdate(roomData.id, (room) => {
+          if (room) {
+            console.log('🏠 Room updated:', room);
+          }
+        });
+
+        // Configure PTT if enabled
+        if (isPushToTalk) {
+          pttManager.configure({
+            key: 'Space',
+            enabled: true,
+            onStart: () => {
+              console.log('🎙️ PTT started');
+              setIsMuted(false);
+              peerManager.setMuted(false);
+            },
+            onEnd: () => {
+              console.log('🎙️ PTT ended');
+              setIsMuted(true);
+              peerManager.setMuted(true);
+            }
+          });
+        }
+
+      } catch (error) {
+        console.error('❌ Failed to initialize WebRTC:', error);
+        announce('Failed to connect to audio bubble');
+        setConnectionStatus('disconnected');
+        toast.error('Failed to connect: ' + error.message);
+      }
+    };
+
+    initializeWebRTC();
+
+    // Cleanup function
+    return () => {
+      if (isCleanupCalled) return;
+      isCleanupCalled = true;
+
+      console.log('🧹 Cleaning up WebRTC connections...');
+
+      // Cleanup subscriptions
+      if (participantsUnsubscribeRef.current) {
+        participantsUnsubscribeRef.current();
+        participantsUnsubscribeRef.current = null;
+      }
+
+      if (roomUnsubscribeRef.current) {
+        roomUnsubscribeRef.current();
+        roomUnsubscribeRef.current = null;
+      }
+
+      // Cleanup peer manager
+      peerManager.cleanup();
+
+      // Cleanup signaling
+      signaling.leaveRoom().catch(error => {
+        console.error('❌ Error leaving room:', error);
+      });
+
+      // Cleanup PTT
+      pttManager.cleanup();
+
+      announce('Left audio bubble');
+    };
+  }, [roomData.id, roomData.name, isPushToTalk, announce, vibrate]);
 
   const shareRoom = async () => {
     const shareData = {
@@ -100,15 +226,26 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const toggleMute = () => {
     const newMutedState = !isMuted;
     setIsMuted(newMutedState);
-    setParticipants(prev => 
-      prev.map(p => p.id === '1' ? { ...p, isMuted: newMutedState } : p)
-    );
+    
+    // Update WebRTC mute state
+    peerManager.setMuted(newMutedState);
+    
+    // Update Firebase participant mute status
+    const currentUserId = authService.getCurrentUserId();
+    if (currentUserId) {
+      signaling.updateParticipantMute(currentUserId, newMutedState).catch(error => {
+        console.error('❌ Failed to update mute status:', error);
+      });
+    }
+    
     announce(newMutedState ? 'Microphone muted' : 'Microphone unmuted');
     vibrate(newMutedState ? [100, 50, 100] : 200);
   };
 
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume);
+    // Note: Volume control is handled per-participant in WebRTC peer manager
+    // This global volume change affects UI only
   };
 
   const toggleTranscription = () => {
@@ -305,6 +442,9 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
           </button>
         </div>
       </nav>
+
+      {/* Development debugger */}
+      {process.env.NODE_ENV === 'development' && <WebRTCDebugger />}
     </div>
   );
 }
