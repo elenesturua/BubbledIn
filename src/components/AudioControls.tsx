@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
@@ -13,6 +13,7 @@ import {
   KeyRound,
   Hand
 } from 'lucide-react';
+import { usePTT } from '../webrtc';
 
 interface AudioControlsProps {
   isMuted: boolean;
@@ -35,13 +36,30 @@ export function AudioControls({
   onPushToTalkToggle,
   onPresenterModeToggle
 }: AudioControlsProps) {
-  const [isTouchPressed, setIsTouchPressed] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
+
+  // Use PTT hook for keyboard and touch handling
+  const { isActive: isPTTActive, startPTT, stopPTT } = usePTT(
+    isPushToTalk,
+    () => {
+      // PTT start - unmute temporarily
+      if (isMuted) {
+        onMuteToggle();
+      }
+    },
+    () => {
+      // PTT end - mute if was originally muted
+      if (isMuted) {
+        onMuteToggle();
+      }
+    },
+    'Space'
+  );
 
   // Simulate microphone input level
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!isMuted && (!isPushToTalk || isTouchPressed)) {
+      if (!isMuted && (!isPushToTalk || isPTTActive)) {
         setMicLevel(Math.random() * 100);
       } else {
         setMicLevel(0);
@@ -49,16 +67,16 @@ export function AudioControls({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isMuted, isPushToTalk, isTouchPressed]);
+  }, [isMuted, isPushToTalk, isPTTActive]);
 
-  const isMicActive = !isMuted && (!isPushToTalk || isTouchPressed);
+  const isMicActive = !isMuted && (!isPushToTalk || isPTTActive);
 
   const handlePushToTalkStart = () => {
-    setIsTouchPressed(true);
+    startPTT();
   };
 
   const handlePushToTalkEnd = () => {
-    setIsTouchPressed(false);
+    stopPTT();
   };
 
   return (
@@ -78,16 +96,16 @@ export function AudioControls({
               onMouseUp={handlePushToTalkEnd}
               onMouseLeave={handlePushToTalkEnd}
               className={`w-24 h-24 rounded-full transition-all duration-150 flex items-center justify-center shadow-lg select-none focus-ring touch-target ${
-                isTouchPressed 
+                isPTTActive 
                   ? 'bg-green-600 text-white scale-110 shadow-xl' 
                   : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
               }`}
-              aria-label={isTouchPressed ? 'Speaking - release to stop' : 'Push and hold to speak'}
-              aria-pressed={isTouchPressed}
+              aria-label={isPTTActive ? 'Speaking - release to stop' : 'Push and hold to speak'}
+              aria-pressed={isPTTActive}
               role="button"
               aria-describedby="push-to-talk-desc"
             >
-              {isTouchPressed ? (
+              {isPTTActive ? (
                 <Mic className="h-10 w-10" aria-hidden="true" />
               ) : (
                 <Hand className="h-10 w-10" aria-hidden="true" />
@@ -112,13 +130,13 @@ export function AudioControls({
           <div className="text-center">
             <p className="font-medium" aria-live="polite">
               {isPushToTalk 
-                ? (isTouchPressed ? 'Speaking' : 'Hold to Talk') 
+                ? (isPTTActive ? 'Speaking' : 'Hold to Talk') 
                 : (isMuted ? 'Muted' : 'Live')
               }
             </p>
-            {isPushToTalk && !isTouchPressed && (
+            {isPushToTalk && !isPTTActive && (
               <p className="text-xs text-gray-500 mt-1" id="push-to-talk-desc">
-                Tap and hold button to speak
+                Tap and hold button or press Spacebar to speak
               </p>
             )}
             {!isPushToTalk && (

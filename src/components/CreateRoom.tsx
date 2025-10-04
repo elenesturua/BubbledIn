@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -6,11 +6,12 @@ import { Label } from './ui/label';
 import { Switch } from './ui/switch';
 import { QRCodeDisplay } from './QRCodeDisplay';
 import { ArrowLeft, Copy, Users, Settings, Share2, Check } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+import { signaling, type RoomData } from '../webrtc';
 
 interface CreateRoomProps {
   onBack: () => void;
-  onRoomCreated: (roomData: any) => void;
+  onRoomCreated: (roomData: RoomData) => void;
 }
 
 export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
@@ -19,38 +20,37 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
   const [presenterMode, setPresenterMode] = useState(false);
   const [transcription, setTranscription] = useState(true);
   const [roomCreated, setRoomCreated] = useState(false);
-  const [roomData, setRoomData] = useState<any>(null);
+  const [roomData, setRoomData] = useState<RoomData | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
-  const generateRoomId = () => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-  };
-
-  const createRoom = () => {
+  const createRoom = async () => {
     if (!roomName.trim()) {
       toast.error('Please enter a room name');
       return;
     }
 
-    const roomId = generateRoomId();
-    const newRoomData = {
-      id: roomId,
-      name: roomName,
-      settings: {
+    setIsCreating(true);
+    
+    try {
+      const newRoomData = await signaling.createRoom(roomName, {
         pushToTalk,
         presenterMode,
         transcription
-      },
-      host: true,
-      url: `${window.location.origin}?room=${roomId}`
-    };
+      });
 
-    setRoomData(newRoomData);
-    setRoomCreated(true);
-    
-    // Simulate room creation delay
-    setTimeout(() => {
-      onRoomCreated(newRoomData);
-    }, 1000);
+      setRoomData(newRoomData);
+      setRoomCreated(true);
+      
+      // Simulate room creation delay for UX
+      setTimeout(() => {
+        onRoomCreated(newRoomData);
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to create room:', error);
+      toast.error('Failed to create room. Please try again.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const copyRoomLink = () => {
@@ -230,9 +230,9 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
             onClick={createRoom} 
             className="w-full h-14 text-lg rounded-2xl shadow-md" 
             size="lg"
-            disabled={!roomName.trim()}
+            disabled={!roomName.trim() || isCreating}
           >
-            Create Audio Bubble
+            {isCreating ? 'Creating...' : 'Create Audio Bubble'}
           </Button>
         </div>
       </div>

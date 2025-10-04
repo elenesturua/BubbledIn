@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { AudioControls } from './AudioControls';
 import { ParticipantsList } from './ParticipantsList';
 import { TranscriptionPanel } from './TranscriptionPanel';
+import { StatusAnnouncer, useStatusAnnouncer } from './StatusAnnouncer';
+import { WebRTCDebugger } from './WebRTCDebugger';
 import { 
   Volume2, 
   VolumeX, 
@@ -19,10 +21,12 @@ import {
   MicOff,
   MoreVertical
 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+import { signaling, peerManager, type RoomData, type Participant } from '../webrtc';
+import { authService } from '../firebase/auth';
 
 interface AudioBubbleProps {
-  roomData: any;
+  roomData: RoomData;
   onLeave: () => void;
 }
 
@@ -34,21 +38,15 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const [isPresenterMode, setIsPresenterMode] = useState(roomData.settings?.presenterMode || false);
   const [showTranscription, setShowTranscription] = useState(false);
   const [activeTab, setActiveTab] = useState<'audio' | 'participants' | 'captions'>('audio');
-  const [participants, setParticipants] = useState([
-    { id: '1', name: 'You', isHost: roomData.host, isMuted: false, isPresenter: roomData.host },
-    { id: '2', name: 'Alex Chen', isHost: false, isMuted: false, isPresenter: false },
-    { id: '3', name: 'Sarah Kim', isHost: false, isMuted: true, isPresenter: false },
-  ]);
-
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   
-  // Simple accessibility helpers
-  const announce = (message: string) => {
-    const announceEl = document.getElementById('announcements');
-    if (announceEl) {
-      announceEl.textContent = message;
-    }
-  };
+  // Refs to store unsubscribe functions
+  const unsubscribeParticipantsRef = useRef<(() => void) | null>(null);
+  const unsubscribeRoomRef = useRef<(() => void) | null>(null);
+  
+  // Status announcer for accessibility
+  const { message, announce, announceJoin, announceLeave, announceMute, announceConnect } = useStatusAnnouncer();
   
   const vibrate = (pattern: number | number[]) => {
     if ('vibrate' in navigator) {
@@ -57,20 +55,127 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   };
 
   useEffect(() => {
-    // Announce room entry
-    announce(`Joining audio bubble: ${roomData.name}. Connecting to audio...`);
-    
-    // Simulate connection process
-    const timer = setTimeout(() => {
-      setIsConnected(true);
-      setConnectionStatus('connected');
-      announce('Successfully connected to audio bubble. You can now communicate with other participants.');
-      vibrate([200, 100, 200]);
-      toast.success('Connected to audio bubble!');
-    }, 2000);
+    // Initialize WebRTC connection
+    const initializeConnection = async () => {
+      try {
+        announce(`Joining audio bubble: ${roomData.name}. Connecting to audio...`);
+        
+        // Initialize local media stream
+        await peerManager.initializeLocalStream();
+        
+        // Initialize room for peer connections
+        await peerManager.initializeRoom(roomData.id);
+        
+        // Set up peer manager callbacks
+        peerManager.setCallbacks({
+          onConnectionStateChange: (state) => {
+            if (state === 'connected') {
+              setIsConnected(true);
+              setConnectionStatus('connected');
+              announceConnect(true);
+              vibrate([200, 100, 200]);
+              toast.success('Connected to audio bubble!');
+            } else if (state === 'disconnected') {
+              setIsConnected(false);
+              setConnectionStatus('disconnected');
+              announceConnect(false);
+            }
+          },
+          onParticipantJoined: (participantId) => {
+            announceJoin(`Participant ${participantId}`);
+          },
+          onParticipantLeft: (participantId) => {
+            announceLeave(`Participant ${participantId}`);
+          },
+          onError: (error) => {
+            console.error('WebRTC error:', error);
+            toast.error('Connection error occurred');
+          }
+        });
 
-    return () => clearTimeout(timer);
-  }, [roomData.name, announce, vibrate]);
+        // Subscribe to participant updates
+        unsubscribeParticipantsRef.current = signaling.onParticipants(roomData.id, async (updatedParticipants) => {
+          setParticipants(updatedParticipants);
+          
+          // Handle participant changes
+          const currentParticipantIds = participants.map(p => p.id);
+          const newParticipantIds = updatedParticipants.map(p => p.id);
+          
+          // Find new participants
+          const newParticipants = updatedParticipants.filter(p => 
+            !currentParticipantIds.includes(p.id) && p.id !== authService.getCurrentUserId()
+          );
+          
+          // Find participants who left
+          const leftParticipants = participants.filter(p => 
+            !newParticipantIds.includes(p.id) && p.id !== authService.getCurrentUserId()
+          );
+          
+          // Connect to new participants
+          for (const participant of newParticipants) {
+            try {
+              await peerManager.handleNewParticipant(participant.id);
+              announceJoin(participant.name);
+            } catch (error) {
+              console.error(`Failed to connect to new participant ${participant.id}:`, error);
+            }
+          }
+          
+          // Remove connections for participants who left
+          for (const participant of leftParticipants) {
+            peerManager.handleParticipantLeft(participant.id);
+            announceLeave(participant.name);
+          }
+          
+          // Connect to all existing participants if this is the first time
+          if (participants.length === 0 && updatedParticipants.length > 1) {
+            try {
+              await peerManager.connectToAllParticipants(updatedParticipants);
+            } catch (error) {
+              console.error('Failed to connect to existing participants:', error);
+            }
+          }
+        });
+
+        // Subscribe to room updates
+        unsubscribeRoomRef.current = signaling.onRoomUpdate(roomData.id, (room) => {
+          if (room) {
+            // Room still exists
+            console.log('Room updated:', room);
+          } else {
+            // Room was deleted
+            announce('Room has been closed by the host');
+            toast.info('Room has been closed');
+            onLeave();
+          }
+        });
+
+        // Cleanup on unmount
+        return () => {
+          console.log('useEffect cleanup running...');
+          if (unsubscribeParticipantsRef.current) {
+            console.log('Unsubscribing from participants...');
+            unsubscribeParticipantsRef.current();
+            unsubscribeParticipantsRef.current = null;
+          }
+          if (unsubscribeRoomRef.current) {
+            console.log('Unsubscribing from room...');
+            unsubscribeRoomRef.current();
+            unsubscribeRoomRef.current = null;
+          }
+          console.log('Cleaning up peer manager...');
+          peerManager.cleanup();
+        };
+      } catch (error) {
+        console.error('Failed to initialize connection:', error);
+        announce('Failed to connect to audio bubble');
+        toast.error('Failed to connect to audio bubble');
+        setConnectionStatus('disconnected');
+      }
+    };
+
+    initializeConnection();
+  }, [roomData.name, roomData.id, announce, announceConnect, announceJoin, announceLeave, vibrate, onLeave]);
 
   const shareRoom = async () => {
     const shareData = {
@@ -98,18 +203,35 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     vibrate(100);
   };
 
-  const toggleMute = () => {
+  const toggleMute = async () => {
     const newMutedState = !isMuted;
     setIsMuted(newMutedState);
-    setParticipants(prev => 
-      prev.map(p => p.id === '1' ? { ...p, isMuted: newMutedState } : p)
-    );
-    announce(newMutedState ? 'Microphone muted' : 'Microphone unmuted');
+    
+    // Update peer manager
+    peerManager.setMuted(newMutedState);
+    
+    // Update signaling service
+    const currentParticipant = participants.find(p => p.id === 'host' || p.isHost);
+    if (currentParticipant) {
+      try {
+        await signaling.updateParticipantMute(currentParticipant.id, newMutedState);
+      } catch (error) {
+        console.error('Failed to update mute status:', error);
+      }
+    }
+    
+    announceMute(newMutedState);
     vibrate(newMutedState ? [100, 50, 100] : 200);
   };
 
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume);
+    // Update volume for all participants
+    participants.forEach(participant => {
+      if (participant.id !== 'host' && !participant.isHost) {
+        peerManager.setParticipantVolume(participant.id, newVolume);
+      }
+    });
   };
 
   const handleTabChange = (newTab: 'audio' | 'participants' | 'captions') => {
@@ -123,15 +245,60 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     vibrate(50);
   };
 
-  const leaveRoom = () => {
+  const leaveRoom = async () => {
+    console.log('=== LEAVE ROOM STARTED ===');
     announce('Leaving audio bubble');
     vibrate([200, 100, 200, 100, 200]);
-    toast.info('Left audio bubble');
-    onLeave();
+    
+    try {
+      // STEP 0: Unsubscribe from Firebase listeners FIRST to stop room updates
+      console.log('STEP 0: Unsubscribing from Firebase listeners...');
+      if (unsubscribeParticipantsRef.current) {
+        unsubscribeParticipantsRef.current();
+        unsubscribeParticipantsRef.current = null;
+        console.log('Unsubscribed from participants');
+      }
+      if (unsubscribeRoomRef.current) {
+        unsubscribeRoomRef.current();
+        unsubscribeRoomRef.current = null;
+        console.log('Unsubscribed from room updates');
+      }
+      
+      // STEP 1: Stop microphone
+      console.log('STEP 1: Stopping microphone...');
+      peerManager.stopLocalStream();
+      console.log('Microphone stopped');
+      toast.success('Microphone turned off');
+      
+      // STEP 2: Leave room in Firebase
+      console.log('STEP 2: Leaving room in Firebase...');
+      await signaling.leaveRoom();
+      console.log('Left room in Firebase');
+      
+      // STEP 3: Cleanup WebRTC connections
+      console.log('STEP 3: Cleaning up remaining WebRTC connections...');
+      peerManager.cleanup();
+      console.log('WebRTC cleanup completed');
+      
+      toast.info('Left audio bubble');
+    } catch (error) {
+      console.error('Failed to leave room:', error);
+      toast.error('Error leaving room');
+    } finally {
+      console.log('STEP 4: Calling onLeave()...');
+      onLeave();
+      console.log('=== LEAVE ROOM COMPLETED ===');
+    }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 flex flex-col">
+      {/* Status Announcer for accessibility */}
+      <StatusAnnouncer message={message} />
+      
+      {/* WebRTC Debugger */}
+      <WebRTCDebugger />
+      
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 shadow-sm" role="banner">
         <div className="flex items-center justify-between">
