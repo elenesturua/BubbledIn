@@ -179,49 +179,87 @@ class PeerManager {
   }
 
   /**
-   * Remove peer connection
+   * Remove peer connection with complete cleanup
    */
   removePeer(participantId: string): void {
     const peerConnection = this.peers.get(participantId);
-    if (peerConnection) {
-      // Detach and remove audio element
+    if (!peerConnection) {
+      console.log(`No peer connection found for ${participantId}, skipping cleanup`);
+      return;
+    }
+
+    console.log(`Cleaning up peer connection for ${participantId}`);
+    
+    try {
+      // STEP 1: Stop and detach audio element completely
+      peerConnection.audioElement.pause();
       peerConnection.audioElement.srcObject = null;
+      peerConnection.audioElement.load();
+      
+      // Remove audio element from DOM
       if (peerConnection.audioElement.parentNode) {
         peerConnection.audioElement.parentNode.removeChild(peerConnection.audioElement);
       }
       
-      // Stop any remote stream tracks
+      // STEP 2: Stop all remote stream tracks
       if (peerConnection.stream) {
-        peerConnection.stream.getTracks().forEach(track => track.stop());
+        peerConnection.stream.getTracks().forEach(track => {
+          console.log(`Stopping remote track: ${track.kind} (id: ${track.id})`);
+          track.stop();
+        });
+        peerConnection.stream = undefined;
       }
       
-      // Clean up RTCPeerConnection senders, receivers, and transceivers
+      // STEP 3: Clean up all senders (local tracks)
       const senders = peerConnection.peer.getSenders();
       senders.forEach(sender => {
         if (sender.track) {
+          console.log(`Stopping sender track: ${sender.track.kind} (id: ${sender.track.id})`);
           sender.track.stop();
         }
-        sender.replaceTrack(null);
+        try {
+          sender.replaceTrack(null);
+        } catch (error) {
+          console.warn(`Failed to replace track for sender:`, error);
+        }
       });
       
+      // STEP 4: Clean up all receivers (remote tracks)
       const receivers = peerConnection.peer.getReceivers();
       receivers.forEach(receiver => {
         if (receiver.track) {
+          console.log(`Stopping receiver track: ${receiver.track.kind} (id: ${receiver.track.id})`);
           receiver.track.stop();
         }
       });
       
+      // STEP 5: Stop all transceivers
       const transceivers = peerConnection.peer.getTransceivers();
       transceivers.forEach(transceiver => {
-        transceiver.stop();
-        transceiver.direction = 'inactive';
+        try {
+          transceiver.stop();
+          transceiver.direction = 'inactive';
+        } catch (error) {
+          console.warn(`Failed to stop transceiver:`, error);
+        }
       });
       
-      // Close peer connection
-      peerConnection.peer.close();
+      // STEP 6: Close peer connection
+      if (peerConnection.peer.connectionState !== 'closed') {
+        peerConnection.peer.close();
+      }
       
+      // STEP 7: Remove from peers map
       this.peers.delete(participantId);
+      
+      // STEP 8: Notify callback
       this.callbacks.onParticipantLeft?.(participantId);
+      
+      console.log(`Peer connection cleanup completed for ${participantId}`);
+    } catch (error) {
+      console.error(`Error cleaning up peer connection for ${participantId}:`, error);
+      // Still remove from peers map even if cleanup failed
+      this.peers.delete(participantId);
     }
   }
 
@@ -303,6 +341,29 @@ class PeerManager {
     } else {
       console.log('No local stream to stop');
     }
+  }
+
+  /**
+   * Force stop all remote streams and detach audio elements
+   */
+  private stopAllRemoteStreams(): void {
+    console.log('Stopping all remote streams...');
+    this.peers.forEach((peerConnection, participantId) => {
+      // Stop all remote stream tracks
+      if (peerConnection.stream) {
+        peerConnection.stream.getTracks().forEach(track => {
+          console.log(`Stopping remote track from ${participantId}: ${track.kind} (id: ${track.id})`);
+          track.stop();
+        });
+        peerConnection.stream = undefined;
+      }
+      
+      // Detach audio element from any source
+      peerConnection.audioElement.srcObject = null;
+      peerConnection.audioElement.pause();
+      peerConnection.audioElement.load();
+    });
+    console.log('All remote streams stopped');
   }
 
   /**
@@ -396,30 +457,50 @@ class PeerManager {
   }
 
   /**
-   * Cleanup all connections
+   * Cleanup all connections - idempotent and safe to call multiple times
    */
   cleanup(): void {
     console.log('PeerManager cleanup started');
     
-    // Close all peer connections
+    // Check if already cleaned up
+    if (this.peers.size === 0 && !this.localStream && this.signalingUnsubscribes.length === 0) {
+      console.log('PeerManager already cleaned up, skipping');
+      return;
+    }
+    
+    // STEP 1: Stop all remote streams first
+    this.stopAllRemoteStreams();
+    
+    // STEP 2: Close all peer connections with full teardown
     const participantIds = Array.from(this.peers.keys());
     participantIds.forEach(participantId => {
       this.removePeer(participantId);
     });
 
-    // Stop local stream
+    // STEP 3: Stop local stream completely
     if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream.getTracks().forEach(track => {
+        console.log(`Stopping local track: ${track.kind} (id: ${track.id})`);
+        track.stop();
+        track.enabled = false;
+      });
       this.localStream = undefined;
     }
 
-    // Unsubscribe from signaling
-    this.signalingUnsubscribes.forEach(unsubscribe => unsubscribe());
+    // STEP 4: Unsubscribe from signaling to prevent new connections
+    this.signalingUnsubscribes.forEach(unsubscribe => {
+      try {
+        unsubscribe();
+      } catch (error) {
+        console.warn('Error unsubscribing from signaling:', error);
+      }
+    });
     this.signalingUnsubscribes = [];
 
-    // Reset state
+    // STEP 5: Reset state
     this.currentRoomId = undefined;
     this.currentUserId = undefined;
+    this.callbacks = {};
     
     console.log('PeerManager cleanup completed');
   }

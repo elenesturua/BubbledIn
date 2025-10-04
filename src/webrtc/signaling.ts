@@ -158,11 +158,11 @@ class SignalingService {
    * Leave the current room
    */
   async leaveRoom(): Promise<void> {
-    if (!this.currentRoom) return;
-
+    console.log('Signaling: Leaving room...');
+    
     try {
       const userId = authService.getCurrentUserId();
-      if (userId) {
+      if (userId && this.currentRoom) {
         const roomId = this.currentRoom.id;
         
         // Remove participant from Firebase
@@ -175,7 +175,8 @@ class SignalingService {
     } catch (error) {
       console.error('Failed to leave room:', error);
     } finally {
-      // Cleanup local state
+      // Always cleanup local state, even if Firebase operations fail
+      console.log('Signaling: Cleaning up local state...');
       this.cleanup();
     }
   }
@@ -215,15 +216,26 @@ class SignalingService {
     const participantsRef = collection(db, 'rooms', roomId, 'participants');
     const q = query(participantsRef, orderBy('joinedAt', 'asc'));
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const participants = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Participant[];
-      
-      this.participants = participants;
-      callback(participants);
-    });
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        try {
+          const participants = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as Participant[];
+          
+          this.participants = participants;
+          this.onParticipantsCallback = callback;
+          callback(participants);
+        } catch (error) {
+          console.error('Error processing participant updates:', error);
+        }
+      },
+      (error) => {
+        console.error('Error in participant subscription:', error);
+        // Don't call callback on error to prevent infinite loops
+      }
+    );
 
     this.unsubscribeCallbacks.push(unsubscribe);
     return unsubscribe;
@@ -235,16 +247,27 @@ class SignalingService {
   onRoomUpdate(roomId: string, callback: RoomUpdateCallback): () => void {
     const roomRef = doc(db, 'rooms', roomId);
     
-    const unsubscribe = onSnapshot(roomRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const roomData = { ...snapshot.data(), id: snapshot.id } as RoomData;
-        this.currentRoom = roomData;
-        callback(roomData);
-      } else {
-        this.currentRoom = null;
-        callback(null);
+    const unsubscribe = onSnapshot(roomRef, 
+      (snapshot) => {
+        try {
+          if (snapshot.exists()) {
+            const roomData = { ...snapshot.data(), id: snapshot.id } as RoomData;
+            this.currentRoom = roomData;
+            this.onRoomUpdateCallback = callback;
+            callback(roomData);
+          } else {
+            this.currentRoom = null;
+            callback(null);
+          }
+        } catch (error) {
+          console.error('Error processing room updates:', error);
+        }
+      },
+      (error) => {
+        console.error('Error in room subscription:', error);
+        // Don't call callback on error to prevent infinite loops
       }
-    });
+    );
 
     this.unsubscribeCallbacks.push(unsubscribe);
     return unsubscribe;
@@ -319,12 +342,21 @@ class SignalingService {
   onSignaling(roomId: string, fromId: string, toId: string, callback: SignalingCallback): () => void {
     const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
     
-    const unsubscribe = onSnapshot(signalingRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data() as SignalingData;
-        callback(data);
+    const unsubscribe = onSnapshot(signalingRef, 
+      (snapshot) => {
+        try {
+          if (snapshot.exists()) {
+            const data = snapshot.data() as SignalingData;
+            callback(data);
+          }
+        } catch (error) {
+          console.error('Error processing signaling data:', error);
+        }
+      },
+      (error) => {
+        console.error('Error in signaling subscription:', error);
       }
-    });
+    );
 
     this.unsubscribeCallbacks.push(unsubscribe);
     return unsubscribe;
@@ -336,21 +368,30 @@ class SignalingService {
   onAllSignaling(roomId: string, userId: string, callback: (fromId: string, data: SignalingData) => void): () => void {
     const signalingRef = collection(db, 'rooms', roomId, 'signaling');
     
-    const unsubscribe = onSnapshot(signalingRef, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added' || change.type === 'modified') {
-          const docId = change.doc.id;
-          // Check if this document is targeting our user (format: fromId_toId)
-          if (docId.endsWith(`_${userId}`)) {
-            const fromId = docId.split('_')[0];
-            if (fromId !== userId) {
-              const data = change.doc.data() as SignalingData;
-              callback(fromId, data);
+    const unsubscribe = onSnapshot(signalingRef, 
+      (snapshot) => {
+        try {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === 'added' || change.type === 'modified') {
+              const docId = change.doc.id;
+              // Check if this document is targeting our user (format: fromId_toId)
+              if (docId.endsWith(`_${userId}`)) {
+                const fromId = docId.split('_')[0];
+                if (fromId !== userId) {
+                  const data = change.doc.data() as SignalingData;
+                  callback(fromId, data);
+                }
+              }
             }
-          }
+          });
+        } catch (error) {
+          console.error('Error processing all signaling data:', error);
         }
-      });
-    });
+      },
+      (error) => {
+        console.error('Error in all signaling subscription:', error);
+      }
+    );
 
     this.unsubscribeCallbacks.push(unsubscribe);
     return unsubscribe;
@@ -371,15 +412,37 @@ class SignalingService {
   }
 
   /**
-   * Cleanup all subscriptions
+   * Cleanup all subscriptions - idempotent and safe to call multiple times
    */
   cleanup(): void {
-    this.unsubscribeCallbacks.forEach(unsubscribe => unsubscribe());
+    console.log('Signaling: Starting cleanup...');
+    
+    // Check if already cleaned up
+    if (this.unsubscribeCallbacks.length === 0 && !this.currentRoom && this.participants.length === 0) {
+      console.log('Signaling: Already cleaned up, skipping');
+      return;
+    }
+    
+    // Unsubscribe from all Firebase listeners
+    this.unsubscribeCallbacks.forEach((unsubscribe, index) => {
+      try {
+        unsubscribe();
+        console.log(`Signaling: Unsubscribed listener ${index + 1}`);
+      } catch (error) {
+        console.warn(`Signaling: Error unsubscribing listener ${index + 1}:`, error);
+      }
+    });
     this.unsubscribeCallbacks = [];
+    
+    // Clear callbacks to prevent further notifications
+    this.onParticipantsCallback = undefined;
+    this.onRoomUpdateCallback = undefined;
+    
+    // Reset state
     this.participants = [];
     this.currentRoom = null;
-    this.notifyParticipants();
-    this.notifyRoomUpdate();
+    
+    console.log('Signaling: Cleanup completed');
   }
 
   private async addParticipant(roomId: string, userId: string, name: string, isHost: boolean): Promise<void> {
