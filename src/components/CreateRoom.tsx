@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -6,7 +6,8 @@ import { Label } from './ui/label';
 import { Switch } from './ui/switch';
 import { QRCodeDisplay } from './QRCodeDisplay';
 import { ArrowLeft, Copy, Users, Settings, Share2, Check } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+import { roomStorage } from '../services/roomStorage';
 
 interface CreateRoomProps {
   onBack: () => void;
@@ -44,13 +45,12 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
       url: `${window.location.origin}?room=${roomId}`
     };
 
+    // Store the room in our storage
+    roomStorage.createRoom(newRoomData);
+    
     setRoomData(newRoomData);
     setRoomCreated(true);
-    
-    // Simulate room creation delay
-    setTimeout(() => {
-      onRoomCreated(newRoomData);
-    }, 1000);
+    toast.success('Room created! Share the QR code to invite others.');
   };
 
   const copyRoomLink = () => {
@@ -82,8 +82,8 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
         <div className="px-4 py-6 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between pt-4">
-            <Button onClick={onBack} variant="ghost" size="sm" className="p-2">
-              <ArrowLeft className="h-5 w-5" />
+            <Button onClick={onBack} variant="ghost" size="sm" className="p-2 hover:bg-blue-50">
+              <ArrowLeft className="h-5 w-5 text-gray-700" />
             </Button>
             <h1 className="text-xl font-semibold">Bubble Created!</h1>
             <div className="w-9" />
@@ -156,14 +156,24 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
             </div>
           </div>
 
-          {/* Enter Button */}
-          <Button 
-            onClick={() => onRoomCreated(roomData)} 
-            className="w-full h-14 text-lg rounded-2xl shadow-md"
-            size="lg"
-          >
-            Enter Audio Bubble
-          </Button>
+          <div className="space-y-3">
+            <Button 
+              onClick={() => onRoomCreated(roomData)} 
+              className="w-full h-14 text-lg rounded-2xl shadow-md"
+              size="lg"
+            >
+              Enter Audio Bubble
+            </Button>
+            
+            <Button 
+              onClick={onBack}
+              variant="outline" 
+              className="w-full h-12 rounded-2xl border-2"
+              size="lg"
+            >
+              Back to Create New Room
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -174,8 +184,8 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
       <div className="px-4 py-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between pt-4">
-          <Button onClick={onBack} variant="ghost" size="sm" className="p-2">
-            <ArrowLeft className="h-5 w-5" />
+          <Button onClick={onBack} variant="ghost" size="sm" className="p-2 hover:bg-blue-50">
+            <ArrowLeft className="h-5 w-5 text-gray-700" />
           </Button>
           <h1 className="text-xl font-semibold">Create Bubble</h1>
           <div className="w-9" />

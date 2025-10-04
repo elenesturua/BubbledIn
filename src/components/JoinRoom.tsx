@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { ArrowLeft, Camera, QrCode, Loader2, Scan, Hash } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+import { QRCodeScanner } from './QRCodeScanner';
+import { roomStorage } from '../services/roomStorage';
 
 interface JoinRoomProps {
   onBack: () => void;
@@ -16,6 +18,7 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
   const [roomCode, setRoomCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'code'>('scan');
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -52,24 +55,62 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
 
     setIsJoining(true);
     
-    // Simulate room lookup and joining
+    // Try to join the room
+    const roomId = roomCode.toUpperCase();
+    const result = roomStorage.joinRoom(roomId);
+    
     setTimeout(() => {
-      // Mock room data
-      const mockRoomData = {
-        id: roomCode.toUpperCase(),
-        name: 'Demo Room',
-        host: false,
-        settings: {
-          pushToTalk: false,
-          presenterMode: true,
-          transcription: true
-        }
-      };
-      
       setIsJoining(false);
-      onRoomJoined(mockRoomData);
-      toast.success('Joined audio bubble!');
-    }, 1500);
+      
+      if (result.success && result.room) {
+        // Convert stored room to room data format
+        const roomData = {
+          id: result.room.id,
+          name: result.room.name,
+          host: false,
+          settings: result.room.settings,
+          url: result.room.url,
+          participants: result.room.participants
+        };
+        
+        onRoomJoined(roomData);
+        toast.success(`Joined "${result.room.name}" successfully!`);
+      } else {
+        toast.error(`Room "${roomId}" not found. Check the code or QR code again.`);
+      }
+    }, 500);
+  };
+
+  const handleQRCodeScanned = (qrData: string) => {
+    console.log('QR Code scanned:', qrData);
+    
+    // Extract room ID from URL
+    const roomMatch = qrData.match(/room=([^&]+)/);
+    if (roomMatch) {
+      const roomId = roomMatch[1];
+      
+      // Try to join the room
+      const result = roomStorage.joinRoom(roomId);
+      
+      if (result.success && result.room) {
+        // Convert stored room to room data format
+        const roomData = {
+          id: result.room.id,
+          name: result.room.name,
+          host: false,
+          settings: result.room.settings,
+          url: result.room.url,
+          participants: result.room.participants
+        };
+        
+        onRoomJoined(roomData);
+        toast.success(`Joined "${result.room.name}" via QR code!`);
+      } else {
+        toast.error(`Room "${roomId}" not found or no longer exists.`);
+      }
+    } else {
+      toast.error('Invalid QR code format');
+    }
   };
 
   // Simulate QR code detection
@@ -157,9 +198,9 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
                     <h3 className="text-lg font-semibold">Camera Access</h3>
                     <p className="text-gray-600">Allow camera access to scan QR codes</p>
                   </div>
-                  <Button onClick={startCamera} size="lg" className="w-full h-12 rounded-2xl">
+                  <Button onClick={() => setShowQRScanner(true)} size="lg" className="w-full h-12 rounded-2xl">
                     <Camera className="h-5 w-5 mr-3" />
-                    Open Camera
+                    Open QR Scanner
                   </Button>
                 </div>
               ) : (
@@ -245,6 +286,14 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
           </div>
         )}
       </div>
+
+      {/* QR Scanner Modal */}
+      {showQRScanner && (
+        <QRCodeScanner
+          onQRCodeScanned={handleQRCodeScanned}
+          onClose={() => setShowQRScanner(false)}
+        />
+      )}
     </div>
   );
 }

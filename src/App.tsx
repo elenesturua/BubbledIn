@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HomePage } from './components/HomePage';
 import { AboutPage } from './components/AboutPage';
 import { CreateRoom } from './components/CreateRoom';
 import { JoinRoom } from './components/JoinRoom';
 import { AudioBubble } from './components/AudioBubble';
 import { Toaster } from './components/ui/sonner';
+import { roomStorage } from './services/roomStorage';
+import { DebugHelper } from './components/DebugHelper';
 
 type AppState = 'home' | 'about' | 'create' | 'join' | 'bubble';
 
@@ -12,21 +14,34 @@ export default function App() {
   const [currentState, setCurrentState] = useState<AppState>('home');
   const [currentRoom, setCurrentRoom] = useState<any>(null);
 
-  // Add skip link for keyboard navigation
+  // Handle URL parameters for direct room joining
   useEffect(() => {
-    const skipLink = document.createElement('a');
-    skipLink.href = '#main-content';
-    skipLink.className = 'skip-link';
-    skipLink.textContent = 'Skip to main content';
-    document.body.insertBefore(skipLink, document.body.firstChild);
-
-    return () => {
-      const existingSkipLink = document.querySelector('.skip-link');
-      if (existingSkipLink) {
-        document.body.removeChild(existingSkipLink);
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    
+    if (roomParam) {
+      // Try to join the room directly from URL
+      const result = roomStorage.joinRoom(roomParam);
+      
+      if (result.success && result.room) {
+        const roomData = {
+          id: result.room.id,
+          name: result.room.name,
+          host: false,
+          settings: result.room.settings,
+          url: result.room.url,
+          participants: result.room.participants
+        };
+        
+        setCurrentRoom(roomData);
+        setCurrentState('bubble');
+      } else {
+        // Room not found, redirect to join page with the room code
+        setCurrentState('join');
       }
-    };
+    }
   }, []);
+
 
   const handleAbout = () => {
     setCurrentState('about');
@@ -128,6 +143,9 @@ export default function App() {
       </main>
 
       <Toaster />
+      
+      {/* Debug helper for development */}
+      <DebugHelper />
       
       {/* Live region for announcements */}
       <div aria-live="polite" aria-atomic="true" className="sr-only" id="announcements" />

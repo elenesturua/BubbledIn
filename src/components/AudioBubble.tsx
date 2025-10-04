@@ -33,7 +33,6 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const [isPushToTalk, setIsPushToTalk] = useState(roomData.settings?.pushToTalk || false);
   const [isPresenterMode, setIsPresenterMode] = useState(roomData.settings?.presenterMode || false);
   const [showTranscription, setShowTranscription] = useState(false);
-  const [activeTab, setActiveTab] = useState<'audio' | 'participants' | 'captions'>('audio');
   const [participants, setParticipants] = useState([
     { id: '1', name: 'You', isHost: roomData.host, isMuted: false, isPresenter: roomData.host },
     { id: '2', name: 'Alex Chen', isHost: false, isMuted: false, isPresenter: false },
@@ -112,14 +111,9 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     setVolume(newVolume);
   };
 
-  const handleTabChange = (newTab: 'audio' | 'participants' | 'captions') => {
-    setActiveTab(newTab);
-    const tabNames = {
-      audio: 'Audio Controls',
-      participants: 'Participants List',
-      captions: 'Live Captions'
-    };
-    announce(`Switched to ${tabNames[newTab]} tab`);
+  const toggleTranscription = () => {
+    setShowTranscription(!showTranscription);
+    announce(`Live captions ${showTranscription ? 'disabled' : 'enabled'}`);
     vibrate(50);
   };
 
@@ -145,7 +139,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
               aria-label={`Connection status: ${connectionStatus}`}
             />
             <div>
-              <h1 className="text-lg font-semibold text-gray-900 leading-tight">{roomData.name}</h1>
+               <h1 className="text-lg font-semibold text-gray-900 leading-tight">{roomData.name}</h1>
               <div className="flex items-center space-x-2 mt-0.5">
                 <span className="text-xs text-gray-500 font-mono" aria-label={`Room code: ${roomData.id}`}>
                   {roomData.id}
@@ -192,146 +186,84 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-hidden" role="main">
-        {activeTab === 'audio' && (
-          <div 
-            className="p-4 h-full overflow-y-auto space-y-6"
-            role="tabpanel"
-            id="audio-panel"
-            aria-labelledby="audio-tab"
-          >
-            {/* Connection Status */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100" role="status" aria-live="polite">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div 
-                    className={`w-3 h-3 rounded-full ${
-                      connectionStatus === 'connected' ? 'bg-green-500' : 
-                      connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-                    }`}
-                    role="img"
-                    aria-label={`Connection status: ${connectionStatus}`}
-                  />
-                  <span className="font-medium text-sm">
-                    {connectionStatus === 'connected' ? 'Connected' : 
-                     connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
-                  </span>
-                </div>
-                <span className="text-xs text-gray-500" aria-label="Using WebRTC protocol">WebRTC</span>
+        <div className="p-4 h-full overflow-y-auto space-y-6">
+          {/* Connection Status */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100" role="status" aria-live="polite">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div 
+                  className={`w-3 h-3 rounded-full ${
+                    connectionStatus === 'connected' ? 'bg-green-500' : 
+                    connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+                  }`}
+                  role="img"
+                  aria-label={`Connection status: ${connectionStatus}`}
+                />
+                <span className="font-medium text-sm">
+                  {connectionStatus === 'connected' ? 'Connected' : 
+                   connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+                </span>
               </div>
-            </div>
-
-            {/* Audio Controls */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-              <AudioControls
-                isMuted={isMuted}
-                volume={volume}
-                isPushToTalk={isPushToTalk}
-                isPresenterMode={isPresenterMode}
-                onMuteToggle={toggleMute}
-                onVolumeChange={handleVolumeChange}
-                onPushToTalkToggle={setIsPushToTalk}
-                onPresenterModeToggle={setIsPresenterMode}
-              />
+              <span className="text-xs text-gray-500" aria-label="Using WebRTC protocol">WebRTC</span>
             </div>
           </div>
-        )}
 
-        {activeTab === 'participants' && (
-          <div 
-            className="p-4 h-full overflow-y-auto"
-            role="tabpanel"
-            id="participants-panel"
-            aria-labelledby="participants-tab"
-          >
+          {/* Participants List */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-semibold" id="participants-heading">
+                Participants ({participants.length})
+              </h2>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={toggleTranscription}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    showTranscription 
+                      ? 'bg-blue-100 text-blue-800' 
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                  aria-label={showTranscription ? 'Hide live captions' : 'Show live captions'}
+                >
+                  {showTranscription ? 'Captions On' : 'Captions Off'}
+                </button>
+              </div>
+            </div>
+            <div role="list" aria-labelledby="participants-heading">
+              <ParticipantsList participants={participants} />
+            </div>
+          </div>
+
+          {/* Audio Controls */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <AudioControls
+              isMuted={isMuted}
+              volume={volume}
+              isPushToTalk={isPushToTalk}
+              isPresenterMode={isPresenterMode}
+              onMuteToggle={toggleMute}
+              onVolumeChange={handleVolumeChange}
+              onPushToTalkToggle={setIsPushToTalk}
+              onPresenterModeToggle={setIsPresenterMode}
+            />
+          </div>
+
+          {/* Live Captions */}
+          {showTranscription && (
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-              <div className="mb-4">
-                <h2 className="font-semibold" id="participants-heading">
-                  Participants ({participants.length})
-                </h2>
-              </div>
-              <div role="list" aria-labelledby="participants-heading">
-                <ParticipantsList participants={participants} />
-              </div>
+              <h3 className="font-semibold mb-3" id="captions-heading">Live Caption</h3>
+              <TranscriptionPanel />
             </div>
-          </div>
-        )}
-
-        {activeTab === 'captions' && (
-          <div 
-            className="p-4 h-full overflow-y-auto"
-            role="tabpanel"
-            id="captions-panel"
-            aria-labelledby="captions-tab"
-          >
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 h-full">
-              <div className="mb-4">
-                <h2 className="font-semibold" id="captions-heading">Live Captions</h2>
-              </div>
-              <div aria-labelledby="captions-heading">
-                <TranscriptionPanel />
-              </div>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
 
-      {/* Bottom Navigation */}
+      {/* Bottom Quick Actions */}
       <nav 
         className="bg-white border-t border-gray-200 px-4 py-2 safe-area-pb" 
-        role="tablist" 
-        aria-label="Audio bubble navigation"
+        role="toolbar"
+        aria-label="Quick actions"
       >
         <div className="flex justify-around">
-          <button
-            onClick={() => handleTabChange('audio')}
-            className={`flex flex-col items-center space-y-1 py-2 px-3 rounded-xl transition-colors focus-ring touch-target ${
-              activeTab === 'audio' ? 'text-blue-600 bg-blue-50' : 'text-gray-500'
-            }`}
-            role="tab"
-            aria-selected={activeTab === 'audio'}
-            aria-controls="audio-panel"
-            id="audio-tab"
-          >
-            <Volume2 className="h-5 w-5" aria-hidden="true" />
-            <span className="text-xs font-medium">Audio</span>
-          </button>
-          
-          <button
-            onClick={() => handleTabChange('participants')}
-            className={`flex flex-col items-center space-y-1 py-2 px-3 rounded-xl transition-colors relative focus-ring touch-target ${
-              activeTab === 'participants' ? 'text-blue-600 bg-blue-50' : 'text-gray-500'
-            }`}
-            role="tab"
-            aria-selected={activeTab === 'participants'}
-            aria-controls="participants-panel"
-            id="participants-tab"
-            aria-describedby="participant-count"
-          >
-            <Users className="h-5 w-5" aria-hidden="true" />
-            <span className="text-xs font-medium">People</span>
-            <div 
-              className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
-              id="participant-count"
-              aria-label={`${participants.length} participants`}
-            >
-              {participants.length}
-            </div>
-          </button>
-          
-          <button
-            onClick={() => handleTabChange('captions')}
-            className={`flex flex-col items-center space-y-1 py-2 px-3 rounded-xl transition-colors focus-ring touch-target ${
-              activeTab === 'captions' ? 'text-blue-600 bg-blue-50' : 'text-gray-500'
-            }`}
-            role="tab"
-            aria-selected={activeTab === 'captions'}
-            aria-controls="captions-panel"
-            id="captions-tab"
-          >
-            <MessageSquare className="h-5 w-5" aria-hidden="true" />
-            <span className="text-xs font-medium">Captions</span>
-          </button>
-
           {/* Quick Mute Button */}
           <button
             onClick={toggleMute}
@@ -347,6 +279,29 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
               <Mic className="h-5 w-5" aria-hidden="true" />
             )}
             <span className="text-xs font-medium">{isMuted ? 'Muted' : 'Live'}</span>
+          </button>
+
+          {/* Captions Toggle */}
+          <button
+            onClick={toggleTranscription}
+            className={`flex flex-col items-center space-y-1 py-2 px-3 rounded-xl transition-colors focus-ring touch-target ${
+              showTranscription ? 'text-blue-600 bg-blue-50' : 'text-gray-500'
+            }`}
+            aria-label={showTranscription ? 'Hide live captions' : 'Show live captions'}
+            aria-pressed={showTranscription}
+          >
+            <MessageSquare className="h-5 w-5" aria-hidden="true" />
+            <span className="text-xs font-medium">Captions</span>
+          </button>
+
+          {/* Share Room */}
+          <button
+            onClick={shareRoom}
+            className="flex flex-col items-center space-y-1 py-2 px-3 rounded-xl transition-colors focus-ring touch-target text-blue-600 hover:bg-blue-50"
+            aria-label="Share room information"
+          >
+            <Share2 className="h-5 w-5" aria-hidden="true" />
+            <span className="text-xs font-medium">Share</span>
           </button>
         </div>
       </nav>

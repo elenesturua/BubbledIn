@@ -143,23 +143,6 @@
     border: 0;
   }
   
-  /* Skip link for keyboard navigation */
-  .skip-link {
-    position: absolute;
-    top: -40px;
-    left: 6px;
-    background: var(--primary);
-    color: var(--primary-foreground);
-    padding: 8px;
-    text-decoration: none;
-    border-radius: 4px;
-    z-index: 1000;
-    transition: top var(--transition-duration);
-  }
-  
-  .skip-link:focus {
-    top: 6px;
-  }
 }
 
 /**

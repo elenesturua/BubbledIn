@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
+import { WifiSignal } from './ui/wifi-signal';
 import { 
   Mic, 
   MicOff, 
@@ -36,20 +37,24 @@ export function AudioControls({
   onPresenterModeToggle
 }: AudioControlsProps) {
   const [isTouchPressed, setIsTouchPressed] = useState(false);
-  const [micLevel, setMicLevel] = useState(0);
+  const [wifiStrength, setWifiStrength] = useState<'excellent' | 'good' | 'fair' | 'poor' | 'disconnected'>('good');
 
-  // Simulate microphone input level
+  // Simulate WiFi strength variations
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!isMuted && (!isPushToTalk || isTouchPressed)) {
-        setMicLevel(Math.random() * 100);
+      const strengths = ['excellent', 'good', 'fair', 'poor'] as const;
+      const randomStrength = strengths[Math.floor(Math.random() * strengths.length)];
+      // Occasionally simulate disconnection
+      if (Math.random() < 0.05) {
+        setWifiStrength('disconnected');
+        setTimeout(() => setWifiStrength('good'), 2000);
       } else {
-        setMicLevel(0);
+        setWifiStrength(randomStrength);
       }
-    }, 100);
+    }, 3000);
 
     return () => clearInterval(interval);
-  }, [isMuted, isPushToTalk, isTouchPressed]);
+  }, []);
 
   const isMicActive = !isMuted && (!isPushToTalk || isTouchPressed);
 
@@ -129,26 +134,12 @@ export function AudioControls({
           </div>
         </div>
 
-        {/* Mic Level Indicator */}
-        <div className="flex flex-col items-center space-y-2" role="img" aria-labelledby="mic-level-label">
-          <div 
-            className="h-24 w-4 bg-gray-200 rounded-full overflow-hidden"
-            aria-hidden="true"
-          >
-            <div 
-              className="w-full bg-gradient-to-t from-green-400 via-yellow-400 to-red-400 transition-all duration-100 ease-out rounded-full"
-              style={{ height: `${micLevel}%`, marginTop: 'auto' }}
-            />
-          </div>
-          <p className="text-xs text-gray-500 text-center" id="mic-level-label">
-            Input Level: {Math.round(micLevel)}%
+        {/* WiFi Signal Indicator */}
+        <div className="flex flex-col items-center space-y-2" role="img" aria-labelledby="wifi-label">
+          <WifiSignal strength={wifiStrength} />
+          <p className="text-xs text-gray-500 text-center" id="wifi-label">
+            Connection: {wifiStrength}
           </p>
-          <div className="sr-only" aria-live="polite">
-            {micLevel > 80 && 'High input level'}
-            {micLevel > 50 && micLevel <= 80 && 'Medium input level'}
-            {micLevel <= 50 && micLevel > 0 && 'Low input level'}
-            {micLevel === 0 && 'No input detected'}
-          </div>
         </div>
       </div>
 

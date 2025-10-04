@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Download, Copy, Share2 } from 'lucide-react';
+import { Download, Copy, Share2, Mic } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 
 interface TranscriptionEntry {
@@ -16,6 +16,8 @@ interface TranscriptionEntry {
 export function TranscriptionPanel() {
   const [transcripts, setTranscripts] = useState<TranscriptionEntry[]>([]);
   const [isListening, setIsListening] = useState(true);
+  const [currentSpeaker, setCurrentSpeaker] = useState<string>('');
+  const [isSomeoneSpeaking, setIsSomeoneSpeaking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Mock transcription data
@@ -50,22 +52,57 @@ export function TranscriptionPanel() {
     }
   ];
 
-  // Simulate real-time transcription
+  // Simulate speech detection and transcription
   useEffect(() => {
-    if (mockTranscripts.length === 0) return;
-    
-    let currentIndex = 0;
-    const interval = setInterval(() => {
-      if (currentIndex < mockTranscripts.length) {
-        setTranscripts(prev => [...prev, mockTranscripts[currentIndex]]);
-        currentIndex++;
-      } else {
-        clearInterval(interval);
-      }
-    }, 3000);
+    if (!isListening) return;
 
-    return () => clearInterval(interval);
-  }, []);
+    const speechPhrases = [
+      "Hi everyone, welcome to our demo",
+      "The background noise here is really challenging",
+      "Our audio bubble technology helps filter it out",
+      "Real-time transcription is working perfectly",
+      "Let me explain the problem we identified",
+      "Can everyone hear me clearly?",
+      "This is much better than shouting",
+      "The captions are really helpful"
+    ];
+
+    let phraseIndex = 0;
+    let speechActive = false;
+
+    const speechSimulation = setInterval(() => {
+      // Simulate someone starting to speak
+      if (!speechActive && Math.random() < 0.3) {
+        speechActive = true;
+        setIsSomeoneSpeaking(true);
+        const speakers = ['Alex Chen', 'Sarah Kim', 'You', 'Jordan Lee'];
+        const currentSpeaker = speakers[Math.floor(Math.random() * speakers.length)];
+        setCurrentSpeaker(currentSpeaker);
+
+        // Simulate speaking duration (2-5 seconds)
+        const speakDuration = 2000 + Math.random() * 3000;
+        
+        setTimeout(() => {
+          // Add transcribed text
+          const newTranscript: TranscriptionEntry = {
+            id: Date.now().toString(),
+            speaker: currentSpeaker,
+            text: speechPhrases[phraseIndex % speechPhrases.length],
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            confidence: 0.85 + Math.random() * 0.1
+          };
+          
+          setTranscripts(prev => [...prev, newTranscript]);
+          speechActive = false;
+          setIsSomeoneSpeaking(false);
+          setCurrentSpeaker('');
+          phraseIndex++;
+        }, 1500); // Wait 1.5 seconds before adding transcript
+      }
+    }, 1500);
+
+    return () => clearInterval(speechSimulation);
+  }, [isListening]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -121,10 +158,17 @@ export function TranscriptionPanel() {
       {/* Status */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className={`w-3 h-3 rounded-full ${isListening ? 'bg-red-500 animate-pulse' : 'bg-gray-400'}`} />
+          <div className={`w-3 h-3 rounded-full ${
+            isSomeoneSpeaking ? 'bg-green-500 animate-pulse' : 
+            isListening ? 'bg-red-500' : 'bg-gray-400'
+          }`} />
           <span className="font-medium">
-            {isListening ? 'Live Captions' : 'Stopped'}
+            {isSomeoneSpeaking ? `${currentSpeaker} speaking...` : 
+             isListening ? 'Live Captions' : 'Stopped'}
           </span>
+          {isSomeoneSpeaking && (
+            <Mic className="h-3 w-3 text-green-600 animate-pulse" />
+          )}
         </div>
         
         <div className="flex space-x-2">
