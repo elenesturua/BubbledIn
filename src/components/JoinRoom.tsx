@@ -4,7 +4,7 @@ import { Input } from './ui/input';
 import { ArrowLeft, Camera, Loader2, Scan, Hash } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeScanner } from './QRCodeScanner';
-import { roomStorage } from '../services/roomStorage';
+import { signaling } from '../webrtc/signaling';
 
 interface JoinRoomProps {
   onBack: () => void;
@@ -25,51 +25,51 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
 
     setIsJoining(true);
     const roomId = roomCode.toUpperCase();
-    const result = roomStorage.joinRoom(roomId);
+    
+    try {
+      const roomData = await signaling.joinRoom(roomId, 'Participant');
+      
+      const roomDataForUI = {
+        id: roomData.id,
+        name: roomData.name,
+        host: false,
+        settings: roomData.settings,
+        url: roomData.url,
+      };
 
-    setTimeout(() => {
+      onRoomJoined(roomDataForUI);
+      toast.success(`Joined "${roomData.name}" successfully!`);
+    } catch (error) {
+      console.error('Failed to join room:', error);
+      toast.error(`Room "${roomId}" not found. Check the code or QR code again.`);
+    } finally {
       setIsJoining(false);
-
-      if (result.success && result.room) {
-        const roomData = {
-          id: result.room.id,
-          name: result.room.name,
-          host: false,
-          settings: result.room.settings,
-          url: result.room.url,
-          participants: result.room.participants,
-        };
-
-        onRoomJoined(roomData);
-        toast.success(`Joined "${result.room.name}" successfully!`);
-      } else {
-        toast.error(`Room "${roomId}" not found. Check the code or QR code again.`);
-      }
-    }, 500);
+    }
   };
 
-  const handleQRCodeScanned = (qrData: string) => {
+  const handleQRCodeScanned = async (qrData: string) => {
     console.log('QR Code scanned:', qrData);
 
     const roomMatch = qrData.match(/room=([^&]+)/);
     if (roomMatch) {
       const roomId = roomMatch[1];
-      const result = roomStorage.joinRoom(roomId);
-
-      if (result.success && result.room) {
-        const roomData = {
-          id: result.room.id,
-          name: result.room.name,
+      
+      try {
+        const roomData = await signaling.joinRoom(roomId, 'Participant');
+        
+        const roomDataForUI = {
+          id: roomData.id,
+          name: roomData.name,
           host: false,
-          settings: result.room.settings,
-          url: result.room.url,
-          participants: result.room.participants,
+          settings: roomData.settings,
+          url: roomData.url,
         };
 
-        onRoomJoined(roomData);
-        toast.success(`Joined "${result.room.name}" via QR code!`);
+        onRoomJoined(roomDataForUI);
+        toast.success(`Joined "${roomData.name}" via QR code!`);
         setShowQRScanner(false);
-      } else {
+      } catch (error) {
+        console.error('Failed to join room via QR:', error);
         toast.error(`Room "${roomId}" not found or no longer exists.`);
       }
     } else {

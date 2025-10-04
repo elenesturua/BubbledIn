@@ -5,7 +5,7 @@ import { CreateRoom } from './components/CreateRoom';
 import { JoinRoom } from './components/JoinRoom';
 import { AudioBubble } from './components/AudioBubble';
 import { Toaster } from './components/ui/sonner';
-import { roomStorage } from './services/roomStorage';
+import { signaling } from './webrtc/signaling';
 import { DebugHelper } from './components/DebugHelper';
 
 type AppState = 'home' | 'about' | 'create' | 'join' | 'bubble';
@@ -21,24 +21,24 @@ export default function App() {
     
     if (roomParam) {
       // Try to join the room directly from URL
-      const result = roomStorage.joinRoom(roomParam);
-      
-      if (result.success && result.room) {
-        const roomData = {
-          id: result.room.id,
-          name: result.room.name,
-          host: false,
-          settings: result.room.settings,
-          url: result.room.url,
-          participants: result.room.participants
-        };
-        
-        setCurrentRoom(roomData);
-        setCurrentState('bubble');
-      } else {
-        // Room not found, redirect to join page with the room code
-        setCurrentState('join');
-      }
+      signaling.joinRoom(roomParam, 'Participant')
+        .then(roomData => {
+          const roomDataForUI = {
+            id: roomData.id,
+            name: roomData.name,
+            host: false,
+            settings: roomData.settings,
+            url: roomData.url
+          };
+          
+          setCurrentRoom(roomDataForUI);
+          setCurrentState('bubble');
+        })
+        .catch(error => {
+          console.error('Failed to join room from URL:', error);
+          // Room not found, redirect to join page with the room code
+          setCurrentState('join');
+        });
     }
   }, []);
 

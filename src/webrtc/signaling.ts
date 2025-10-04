@@ -393,10 +393,10 @@ class SignalingService {
     try {
       console.log('📥 Sending answer from', fromId, 'to', toId, 'in room', roomId);
       const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
-      await updateDoc(signalingRef, {
+      await setDoc(signalingRef, {
         answer,
         timestamp: serverTimestamp()
-      });
+      }, { merge: true });
       console.log('✅ Answer sent successfully');
     } catch (error) {
       console.error('❌ Failed to send answer:', error);
@@ -410,11 +410,26 @@ class SignalingService {
   async sendIceCandidate(roomId: string, fromId: string, toId: string, candidate: RTCIceCandidateInit): Promise<void> {
     try {
       console.log('🧊 Sending ICE candidate from', fromId, 'to', toId, 'in room', roomId);
+      
+      // Convert RTCIceCandidateInit to a plain object that Firebase can serialize
+      const serializableCandidate = {
+        candidate: candidate.candidate || '',
+        sdpMLineIndex: candidate.sdpMLineIndex || null,
+        sdpMid: candidate.sdpMid || null
+      };
+      
       const signalingRef = doc(db, 'rooms', roomId, 'signaling', `${fromId}_${toId}`);
-      await updateDoc(signalingRef, {
-        iceCandidates: arrayUnion(candidate),
+      
+      // First, get the existing document to append to iceCandidates array
+      const docSnap = await getDoc(signalingRef);
+      const existingData = docSnap.exists() ? docSnap.data() : {};
+      const existingCandidates = existingData.iceCandidates || [];
+      
+      await setDoc(signalingRef, {
+        ...existingData,
+        iceCandidates: [...existingCandidates, serializableCandidate],
         timestamp: serverTimestamp()
-      });
+      }, { merge: true });
       console.log('✅ ICE candidate sent successfully');
     } catch (error) {
       console.error('❌ Failed to send ICE candidate:', error);
