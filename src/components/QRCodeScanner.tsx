@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Button } from "./ui/button";
 import { X } from "lucide-react";
 import { toast } from "sonner";
+import { QrReader } from 'react-qr-reader';
 
 interface QRCodeScannerProps {
   onQRCodeScanned: (data: string) => void;
