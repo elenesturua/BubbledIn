@@ -33,7 +33,7 @@ export function ParticipantsList({ participants }: ParticipantsListProps) {
   };
 
   const getParticipantStatus = (participant: Participant) => {
-    const statuses = [];
+    const statuses: string[] = [];
     if (participant.id === '1') statuses.push('You');
     if (participant.isHost) statuses.push('Host');
     if (participant.isPresenter) statuses.push('Presenter');
