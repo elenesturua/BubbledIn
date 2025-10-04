@@ -5,6 +5,7 @@
 
 import { signaling, type SignalingData, type Participant } from './signaling';
 import { authService } from '../firebase/auth';
+import { WEBRTC_CONFIG, FALLBACK_WEBRTC_CONFIG, CONNECTION_CONFIG, MEDIA_CONSTRAINTS } from './config';
 
 export interface PeerConnection {
   peer: RTCPeerConnection;
@@ -28,6 +29,14 @@ class PeerManager {
   private currentRoomId?: string;
   private currentUserId?: string;
   private signalingUnsubscribes: (() => void)[] = [];
+  private connectionRetryAttempts: Map<string, number> = new Map();
+  private maxRetryAttempts = CONNECTION_CONFIG.maxRetryAttempts;
+  private retryDelay = CONNECTION_CONFIG.retryDelay;
+  private stunFailureCount = 0;
+  private maxStunFailures = 5; // Switch to fallback after 5 STUN failures
+  private turnFailureCount = 0;
+  private maxTurnFailures = 3; // Track TURN failures separately
+  private usingFallbackConfig = false;
 
   /**
    * Initialize local media stream
@@ -35,13 +44,7 @@ class PeerManager {
   async initializeLocalStream(): Promise<MediaStream> {
     try {
       console.log('🎤 Initializing local media stream...');
-      this.localStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
+      this.localStream = await navigator.mediaDevices.getUserMedia(MEDIA_CONSTRAINTS);
       console.log('✅ Local media stream initialized successfully');
       return this.localStream;
     } catch (error) {
@@ -74,12 +77,13 @@ class PeerManager {
    */
   async createPeer(participantId: string): Promise<PeerConnection> {
     console.log('🔗 Creating peer connection for participant:', participantId);
-    const configuration: RTCConfiguration = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    };
+    
+    // Use fallback configuration if too many STUN servers have failed
+    const configuration: RTCConfiguration = this.usingFallbackConfig ? FALLBACK_WEBRTC_CONFIG : WEBRTC_CONFIG;
+    
+    if (this.usingFallbackConfig) {
+      console.log('🔄 Using fallback WebRTC configuration due to STUN server failures');
+    }
 
     const peer = new RTCPeerConnection(configuration);
     const audioElement = document.createElement('audio');
@@ -123,6 +127,10 @@ class PeerManager {
     }
 
     console.log('🤝 Connecting to participant:', participantId);
+    
+    // Reset retry attempts for new connection
+    this.connectionRetryAttempts.delete(participantId);
+    
     // Create peer connection
     const peerConnection = await this.createPeer(participantId);
     
@@ -194,6 +202,41 @@ class PeerManager {
       console.log('✅ ICE candidate added for participant:', fromId);
     } else {
       console.warn('⚠️ No peer connection found for ICE candidate from participant:', fromId);
+    }
+  }
+
+  /**
+   * Retry connection to a participant
+   */
+  private async retryConnection(participantId: string): Promise<void> {
+    const currentAttempts = this.connectionRetryAttempts.get(participantId) || 0;
+    
+    if (currentAttempts >= this.maxRetryAttempts) {
+      console.error('❌ Max retry attempts reached for participant:', participantId);
+      this.callbacks.onError?.(new Error(`Failed to connect to participant ${participantId} after ${this.maxRetryAttempts} attempts`));
+      return;
+    }
+    
+    console.log(`🔄 Retrying connection to participant ${participantId} (attempt ${currentAttempts + 1}/${this.maxRetryAttempts})`);
+    this.connectionRetryAttempts.set(participantId, currentAttempts + 1);
+    
+    // Wait before retrying
+    await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+    
+    try {
+      // Remove old peer connection
+      const oldPeer = this.peers.get(participantId);
+      if (oldPeer) {
+        oldPeer.peer.close();
+        oldPeer.audioElement.remove();
+        this.peers.delete(participantId);
+      }
+      
+      // Create new peer connection
+      await this.connectToParticipant(participantId);
+    } catch (error) {
+      console.error('❌ Retry failed for participant:', participantId, error);
+      // Will retry again on next failure
     }
   }
 
@@ -459,6 +502,12 @@ class PeerManager {
     
     console.log('📊 Current state - Peers:', this.peers.size, 'Local stream:', !!this.localStream, 'Signaling subs:', this.signalingUnsubscribes.length);
     
+    // Clear retry attempts and reset failure tracking
+    this.connectionRetryAttempts.clear();
+    this.stunFailureCount = 0;
+    this.turnFailureCount = 0;
+    this.usingFallbackConfig = false;
+    
     this.stopAllRemoteStreams();
     
     const participantIds = Array.from(this.peers.keys());
@@ -524,10 +573,18 @@ class PeerManager {
       
       if (peer.connectionState === 'connected') {
         console.log('✅ Connected to participant:', participantId);
+        // Reset retry attempts on successful connection
+        this.connectionRetryAttempts.delete(participantId);
         this.callbacks.onParticipantJoined?.(participantId);
       } else if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') {
         console.log('❌ Disconnected from participant:', participantId, 'state:', peer.connectionState);
         this.callbacks.onParticipantLeft?.(participantId);
+        
+        // Retry connection if it failed
+        if (peer.connectionState === 'failed') {
+          console.log('🔄 Connection failed, attempting retry for participant:', participantId);
+          this.retryConnection(participantId);
+        }
       }
     };
 
@@ -536,15 +593,68 @@ class PeerManager {
       console.log('🧊 ICE connection state changed for participant:', participantId, 'to:', peer.iceConnectionState);
       if (peer.iceConnectionState === 'connected') {
         console.log('✅ ICE connected to participant:', participantId);
+        // Reset retry attempts and failure counts on successful ICE connection
+        this.connectionRetryAttempts.delete(participantId);
+        this.stunFailureCount = 0; // Reset STUN failure count on successful connection
+        this.turnFailureCount = 0; // Reset TURN failure count on successful connection
+        this.usingFallbackConfig = false; // Reset fallback flag
         this.callbacks.onParticipantJoined?.(participantId);
       } else if (peer.iceConnectionState === 'disconnected' || peer.iceConnectionState === 'failed') {
         console.log('❌ ICE disconnected from participant:', participantId, 'state:', peer.iceConnectionState);
         this.callbacks.onParticipantLeft?.(participantId);
+        
+        // Retry connection if ICE failed
+        if (peer.iceConnectionState === 'failed') {
+          console.log('🔄 ICE connection failed, attempting retry for participant:', participantId);
+          this.retryConnection(participantId);
+        }
       }
     };
 
     // Handle ICE candidate errors
     peer.onicecandidateerror = (error) => {
+      // Track STUN server failures and switch to fallback if needed
+      if (error.url && error.url.includes('stun:')) {
+        this.stunFailureCount++;
+        console.warn('⚠️ STUN server failed for participant:', participantId, 'URL:', error.url, 'Error:', error.errorText, `(${this.stunFailureCount}/${this.maxStunFailures})`);
+        
+        // Switch to fallback configuration if too many STUN servers fail
+        if (this.stunFailureCount >= this.maxStunFailures && !this.usingFallbackConfig) {
+          console.log('🔄 Too many STUN server failures, switching to fallback configuration');
+          this.usingFallbackConfig = true;
+          // Don't treat STUN failures as critical errors - they're expected
+          return;
+        }
+        return;
+      }
+      
+      // Handle TURN server failures more intelligently
+      if (error.url && error.url.includes('turn:')) {
+        // Some TURN server errors are normal during ICE gathering
+        const isNormalTurnError = 
+          error.errorText?.includes('Address not associated with the desired network interface') ||
+          error.errorText?.includes('Failed to establish connection') ||
+          error.errorText?.includes('Connection refused') ||
+          error.errorText?.includes('Network unreachable');
+        
+        if (isNormalTurnError) {
+          this.turnFailureCount++;
+          console.warn('⚠️ TURN server failed for participant:', participantId, 'URL:', error.url, 'Error:', error.errorText, `(${this.turnFailureCount}/${this.maxTurnFailures}) (normal during ICE gathering)`);
+          
+          // Warn if TURN servers are consistently failing
+          if (this.turnFailureCount >= this.maxTurnFailures) {
+            console.warn('⚠️ Multiple TURN server failures detected. Connection may rely on direct peer-to-peer connection.');
+          }
+          return;
+        }
+        
+        // Only log as error for truly critical TURN failures
+        console.error('❌ Critical TURN server error for participant:', participantId, 'URL:', error.url, 'Error:', error.errorText);
+        this.callbacks.onError?.(new Error(`Critical TURN server failed: ${error.errorText}`));
+        return;
+      }
+      
+      // Log other ICE candidate errors
       console.error('❌ ICE candidate error for participant:', participantId, error);
       this.callbacks.onError?.(new Error(`ICE candidate failed: ${error.errorText}`));
     };

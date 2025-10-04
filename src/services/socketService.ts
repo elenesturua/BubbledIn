@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { WEBRTC_CONFIG, MEDIA_CONSTRAINTS } from '../webrtc/config';
 
 function createSocketService() {
   let socket: Socket | null = null;
@@ -49,13 +50,7 @@ function createSocketService() {
 
   const requestMicrophoneAccess = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
+      const stream = await navigator.mediaDevices.getUserMedia(MEDIA_CONSTRAINTS);
       return stream;
     } catch (error) {
       console.error('Microphone access denied:', error);
@@ -64,12 +59,7 @@ function createSocketService() {
   };
 
   const createPeerConnection = () => {
-    return new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    });
+    return new RTCPeerConnection(WEBRTC_CONFIG);
   };
 
   return {
