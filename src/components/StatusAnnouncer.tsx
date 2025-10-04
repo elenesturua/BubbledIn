@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 
 interface StatusAnnouncerProps {
   message: string;
@@ -30,13 +30,20 @@ export function StatusAnnouncer({ message }: StatusAnnouncerProps) {
 export function useStatusAnnouncer() {
   const [message, setMessage] = useState('');
 
+  const announce = useCallback((msg: string) => setMessage(msg), []);
+  const announceJoin = useCallback((name: string) => setMessage(`${name} joined the room`), []);
+  const announceLeave = useCallback((name: string) => setMessage(`${name} left the room`), []);
+  const announceMute = useCallback((isMuted: boolean) => setMessage(isMuted ? 'Microphone muted' : 'Microphone unmuted'), []);
+  const announceConnect = useCallback((isConnected: boolean) => setMessage(isConnected ? 'Connected to audio bubble' : 'Disconnected from audio bubble'), []);
+  const announcePTT = useCallback((isActive: boolean) => setMessage(isActive ? 'Push to talk active' : 'Push to talk released'), []);
+
   return {
     message,
-    announce: setMessage,
-    announceJoin: (name: string) => setMessage(`${name} joined the room`),
-    announceLeave: (name: string) => setMessage(`${name} left the room`),
-    announceMute: (isMuted: boolean) => setMessage(isMuted ? 'Microphone muted' : 'Microphone unmuted'),
-    announceConnect: (isConnected: boolean) => setMessage(isConnected ? 'Connected to audio bubble' : 'Disconnected from audio bubble'),
-    announcePTT: (isActive: boolean) => setMessage(isActive ? 'Push to talk active' : 'Push to talk released')
+    announce,
+    announceJoin,
+    announceLeave,
+    announceMute,
+    announceConnect,
+    announcePTT
   };
 }
