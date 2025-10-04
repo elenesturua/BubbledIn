@@ -1,7 +1,8 @@
-import React from "react";
 import { Button } from "./ui/button";
-import { Waves, QrCode, Info } from "lucide-react";
-import { Logo } from "./Logo";
+import { Card, CardContent } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Waves, Info, QrCode, Users, Shield, Zap, Headphones, Mic } from "lucide-react";
+import Logo from "./Logo";
 
 interface HomePageProps {
   onCreateRoom: () => void;
@@ -15,94 +16,127 @@ export function HomePage({
   onAbout,
 }: HomePageProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 flex flex-col">
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 md:px-8 md:py-16">
-        <div className="w-full max-w-md space-y-10 md:space-y-12">
-          {/* Header */}
-          <header className="text-center space-y-6 md:space-y-8" role="banner">
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-blue-50 via-white to-indigo-100">
+      <div className="relative z-10 min-h-screen flex flex-col">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+          {/* Hero Section */}
+          <header className="text-center space-y-8 mb-12" role="banner">
+            {/* Logo */}
             <div className="relative inline-block">
-              <Logo 
-                className="w-24 h-24 md:w-40 md:h-40"
-                width={160}
-                height={160}
-              />
-              <div
-                className="absolute -top-1 -right-1 w-5 h-5 md:w-8 md:h-8 bg-green-500 rounded-full border-2 md:border-4 border-white shadow-lg"
-                role="status"
-                aria-label="App is online and ready"
-              >
-                <span className="sr-only">System is online</span>
-              </div>
+              <Logo width={128} height={128} className="mx-auto" />
             </div>
 
-            <div className="space-y-3 md:space-y-4">
-              <h1 className="text-3xl md:text-5xl font-bold text-gray-900">
-                BubbledIn
+            {/* Title and Tagline */}
+            <div className="space-y-4">
+              <h1 className="text-xl md:text-8xl lg:text-9xl font-extrabold tracking-tight leading-tight text-blue-700" style={{ fontFamily: "'Poppins', system-ui, sans-serif" }}>
+                bubbledin
               </h1>
-              <p className="text-base md:text-xl text-gray-600">
-                Clear communication in noisy environments
+              <p className="text-xl text-gray-700 max-w-lg mx-auto leading-relaxed">
+                Create private audio spaces in noisy environments.
               </p>
+            </div>
+
+            {/* Feature Highlights */}
+            <div className="flex flex-wrap justify-center gap-3 max-w-md mx-auto">
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700 px-3 py-1">
+                <Shield className="h-3 w-3 mr-3" />
+                Private
+              </Badge>
+              <Badge variant="secondary" className="bg-green-100 text-green-700 px-3 py-1">
+                <Zap className="h-3 w-3 mr-3" />
+                Instant
+              </Badge>
             </div>
           </header>
 
-          {/* Action Buttons */}
-          <section className="space-y-4 md:space-y-6" aria-labelledby="actions-heading">
+          {/* Main Action Buttons */}
+          <section
+            className="w-full max-w-sm space-y-4 mb-8"
+            aria-labelledby="actions-heading"
+          >
             <h2 id="actions-heading" className="sr-only">
               Get Started
             </h2>
 
+            {/* Create Room Button */}
             <Button
               onClick={onCreateRoom}
+              variant="solid"
               size="lg"
-              className="w-full h-14 md:h-16 text-base md:text-lg rounded-2xl shadow-lg hover:shadow-xl transition-shadow"
-              aria-label="Create a new audio bubble room"
-            >
-              <Waves className="h-5 w-5 md:h-6 md:w-6 mr-2 md:mr-3" aria-hidden="true" />
-              Create Audio Bubble
-            </Button>
-
-            <Button
-              onClick={onJoinRoom}
-              variant="outline"
-              size="lg"
-              className="w-full h-14 md:h-16 text-base md:text-lg rounded-2xl border-2 hover:bg-gray-50 transition-colors"
+              className="w-full h-16 text-lg rounded-2xl 
+                        bg-blue-600 hover:bg-blue-700 
+                        text-white shadow-lg hover:shadow-xl 
+                        transform hover:scale-105 transition-all duration-200"
               aria-label="Join an existing audio bubble with QR code"
             >
-              <QrCode className="h-5 w-5 md:h-6 md:w-6 mr-2 md:mr-3" aria-hidden="true" />
-              Join QR Code
+              <div className="flex items-center justify-center space-x-3">
+                <QrCode className="h-5 w-5" aria-hidden="true" />
+                <span>Create Audio Bubble</span>
+              </div>
             </Button>
 
+            {/* Join Room Button */}
             <Button
-              onClick={onAbout}
-              variant="ghost"
+              onClick={onJoinRoom}
+              variant="solid"
               size="lg"
-              className="w-full h-12 md:h-14 text-sm md:text-base rounded-2xl text-blue-600 hover:bg-blue-50 transition-colors mt-4 md:mt-6"
-              aria-label="Learn more about BubbledIn"
+              className="w-full h-16 text-lg rounded-2xl 
+                        bg-blue-600 hover:bg-blue-700 
+                        text-white shadow-lg hover:shadow-xl 
+                        transform hover:scale-105 transition-all duration-200"
+              aria-label="Join an existing audio bubble with QR code"
             >
-              <Info className="h-4 w-4 md:h-5 md:w-5 mr-2" aria-hidden="true" />
-              Learn More
+              <div className="flex items-center justify-center space-x-3">
+                <QrCode className="h-5 w-5" aria-hidden="true" />
+                <span>Join with QR Code</span>
+              </div>
             </Button>
           </section>
-        </div>
-      </div>
 
-      {/* Footer Info */}
-      <footer
-        className="text-center text-gray-500 pb-8 px-6"
-        role="contentinfo"
-      >
-        <p className="text-sm mb-3">
-          Perfect for hackathons & demo days
-        </p>
-        <div className="flex items-center justify-center space-x-3 text-xs">
-          <span>No accounts</span>
-          <span className="text-gray-400">•</span>
-          <span>Instant setup</span>
-          <span className="text-gray-400">•</span>
-          <span>Private</span>
+          {/* Learn More Button */}
+          <Card className="group relative overflow-hidden max-w-md mx-auto mt-6 bg-white/60 backdrop-blur-sm border border-blue-200/40 shadow-md hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 cursor-pointer">
+            <CardContent className="p-4 flex items-center justify-center relative">
+              {/* gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" aria-hidden="true" />
+              <Button
+                onClick={onAbout}
+                variant="ghost"
+                size="lg"
+                className="relative z-10 text-blue-600 group-hover:text-white hover:text-blue-700 hover:bg-blue-50/50 rounded-xl transition-all duration-200"
+                aria-label="Learn more about Audio Bubbles"
+              >
+                <Info className="h-4 w-4 mr-2 group-hover:text-white" aria-hidden="true" />
+                <span className="group-hover:text-white">Learn More About Audio Bubbles</span>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
-      </footer>
+
+        {/* Enhanced Footer */}
+        <footer className="text-center pb-8 px-6" role="contentinfo">
+          <Card className="bg-white/40 backdrop-blur-sm border border-blue-200/30 shadow-lg max-w-md mx-auto">
+            <CardContent className="p-6">
+              <p className="text-blue-700 font-medium mb-3">
+                🎯 Built for Noisy Environments
+              </p>
+              <div className="flex items-center justify-center gap-6 text-sm text-gray-700">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-green-500 flex-shrink-0" aria-hidden="true" />
+                  <span className="mr-3">No Registration</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" aria-hidden="true" />
+                  <span className="mr-3">Instant Setup</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 flex-shrink-0" aria-hidden="true" />
+                  <span>Secure & Private</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </footer>
+      </div>
     </div>
   );
 }
