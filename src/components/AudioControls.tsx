@@ -21,6 +21,7 @@ interface AudioControlsProps {
   onMuteToggle: () => void;
   onVolumeChange: (volume: number) => void;
   onPushToTalkToggle: (enabled: boolean) => void;
+  onPushToTalkPress: (pressed: boolean) => void;
 }
 
 export function AudioControls({
@@ -29,7 +30,8 @@ export function AudioControls({
   isPushToTalk,
   onMuteToggle,
   onVolumeChange,
-  onPushToTalkToggle
+  onPushToTalkToggle,
+  onPushToTalkPress
 }: AudioControlsProps) {
   const [isTouchPressed, setIsTouchPressed] = useState(false);
   const [wifiStrength, setWifiStrength] = useState<'excellent' | 'good' | 'fair' | 'poor' | 'disconnected'>('good');
@@ -54,11 +56,15 @@ export function AudioControls({
   const isMicActive = !isMuted && (!isPushToTalk || isTouchPressed);
 
   const handlePushToTalkStart = () => {
+    console.log('🎤 PTT Start triggered');
     setIsTouchPressed(true);
+    onPushToTalkPress(true);
   };
 
   const handlePushToTalkEnd = () => {
+    console.log('🎤 PTT End triggered');
     setIsTouchPressed(false);
+    onPushToTalkPress(false);
   };
 
   return (

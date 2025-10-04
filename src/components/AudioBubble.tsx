@@ -34,6 +34,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(75);
   const [isPushToTalk, setIsPushToTalk] = useState(roomData.settings?.pushToTalk || false);
+  const [isPushToTalkPressed, setIsPushToTalkPressed] = useState(false);
   const [showTranscription, setShowTranscription] = useState(false);
   const [activeTab, setActiveTab] = useState<'audio' | 'participants' | 'captions'>('audio');
   
@@ -69,6 +70,32 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
       setIsConnected(true);
     }
   }, [participants.length, connectionStatus]);
+
+  // Handle PTT state changes
+  useEffect(() => {
+    console.log('🎤 PTT Effect - PTT:', isPushToTalk, 'Pressed:', isPushToTalkPressed, 'Muted:', isMuted);
+    if (isPushToTalk) {
+      // PTT is enabled, control mic based on press state
+      const shouldBeMuted = !isPushToTalkPressed;
+      console.log('🎤 PTT enabled, setting mic muted to:', shouldBeMuted);
+      peerManager.setMuted(shouldBeMuted);
+    } else {
+      // PTT is disabled, restore normal mute state
+      console.log('🎤 PTT disabled, restoring mute state to:', isMuted);
+      peerManager.setMuted(isMuted);
+    }
+  }, [isPushToTalk, isPushToTalkPressed]);
+
+  // Handle PTT toggle on/off
+  useEffect(() => {
+    if (isPushToTalk) {
+      // PTT just enabled, mute mic initially
+      peerManager.setMuted(true);
+    } else {
+      // PTT disabled, restore normal mute state
+      peerManager.setMuted(isMuted);
+    }
+  }, [isPushToTalk]);
 
   useEffect(() => {
     // Initialize WebRTC connection AND Web Speech API
@@ -304,6 +331,11 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   };
 
   const toggleMute = async () => {
+    // Don't allow manual mute/unmute when PTT is active and pressed
+    if (isPushToTalk && isPushToTalkPressed) {
+      return;
+    }
+    
     const newMutedState = !isMuted;
     setIsMuted(newMutedState);
     
@@ -332,6 +364,17 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         peerManager.setParticipantVolume(participant.id, newVolume);
       }
     });
+  };
+
+  const handlePushToTalkPress = (pressed: boolean) => {
+    console.log('🎤 PTT Press:', pressed, 'PTT Enabled:', isPushToTalk);
+    setIsPushToTalkPressed(pressed);
+    // When PTT is enabled, directly control microphone based on press state
+    if (isPushToTalk) {
+      const shouldBeMuted = !pressed;
+      console.log('🎤 Setting mic muted to:', shouldBeMuted);
+      peerManager.setMuted(shouldBeMuted);
+    }
   };
 
   const toggleTranscription = () => {
@@ -507,6 +550,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
                 onMuteToggle={toggleMute}
                 onVolumeChange={handleVolumeChange}
                 onPushToTalkToggle={setIsPushToTalk}
+                onPushToTalkPress={handlePushToTalkPress}
               />
             </div>
           </div>

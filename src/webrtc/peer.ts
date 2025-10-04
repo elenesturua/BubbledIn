@@ -293,10 +293,16 @@ class PeerManager {
    * Mute/unmute local stream
    */
   setMuted(muted: boolean): void {
+    console.log('🎤 PeerManager.setMuted called with:', muted);
     if (this.localStream) {
-      this.localStream.getAudioTracks().forEach(track => {
+      const audioTracks = this.localStream.getAudioTracks();
+      console.log('🎤 Found', audioTracks.length, 'audio tracks');
+      audioTracks.forEach((track, index) => {
+        console.log(`🎤 Track ${index}: enabled=${track.enabled}, setting to ${!muted}`);
         track.enabled = !muted;
       });
+    } else {
+      console.log('🎤 No local stream available for muting');
     }
   }
 
