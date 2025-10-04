@@ -8,18 +8,28 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
 
-// Firebase configuration
+// Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: 'AIzaSyCxGaiQ6YF0imcNLzhwLA408__YoWz6F3o',
-  authDomain: 'bubbledin-c4ff0.firebaseapp.com',
-  projectId: 'bubbledin-c4ff0',
-  storageBucket: 'bubbledin-c4ff0.firebasestorage.app',
-  messagingSenderId: '724646441543',
-  appId: '1:724646441543:web:2697cc9f261ea499e1f762',
-  measurementId: 'G-2NQZ1MVEHK'
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-console.log('🔥 Firebase configuration loaded successfully!');
+// Validate Firebase configuration
+const missingConfig = Object.entries(firebaseConfig)
+  .filter(([_, value]) => !value)
+  .map(([key, _]) => key);
+
+if (missingConfig.length > 0) {
+  console.warn('⚠️ Missing Firebase configuration:', missingConfig);
+  console.warn('📖 Please create a .env file with your Firebase credentials.\nSee README.md for setup instructions.');
+} else {
+  console.log('🔥 Firebase configuration loaded successfully!');
+}
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
