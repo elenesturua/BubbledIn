@@ -5,6 +5,7 @@ import { CreateRoom } from './components/CreateRoom';
 import { JoinRoom } from './components/JoinRoom';
 import { AudioBubble } from './components/AudioBubble';
 import { Toaster } from './components/ui/sonner';
+import React from 'react';
 
 type AppState = 'home' | 'about' | 'create' | 'join' | 'bubble';
 
@@ -58,6 +59,15 @@ export default function App() {
   const handleLeaveRoom = () => {
     setCurrentState('home');
     setCurrentRoom(null);
+    
+    // Refresh the page to ensure microphone changes are applied
+    // This ensures any lingering media streams are completely cleared
+    console.log('Refreshing page to ensure microphone cleanup...');
+    
+    // Small delay to ensure cleanup operations complete before refresh
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   };
 
   // Get page title for screen readers

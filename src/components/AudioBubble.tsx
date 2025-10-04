@@ -153,6 +153,8 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         // Cleanup on unmount
         return () => {
           console.log('useEffect cleanup running...');
+          
+          // Unsubscribe from Firebase listeners
           if (unsubscribeParticipantsRef.current) {
             console.log('Unsubscribing from participants...');
             unsubscribeParticipantsRef.current();
@@ -163,6 +165,8 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
             unsubscribeRoomRef.current();
             unsubscribeRoomRef.current = null;
           }
+          
+          // Cleanup WebRTC connections (idempotent)
           console.log('Cleaning up peer manager...');
           peerManager.cleanup();
         };
@@ -251,7 +255,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     vibrate([200, 100, 200, 100, 200]);
     
     try {
-      // STEP 0: Unsubscribe from Firebase listeners FIRST to stop room updates
+      // STEP 0: Unsubscribe from Firebase listeners FIRST to prevent new connections
       console.log('STEP 0: Unsubscribing from Firebase listeners...');
       if (unsubscribeParticipantsRef.current) {
         unsubscribeParticipantsRef.current();
@@ -264,28 +268,26 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         console.log('Unsubscribed from room updates');
       }
       
-      // STEP 1: Stop microphone
-      console.log('STEP 1: Stopping microphone...');
-      peerManager.stopLocalStream();
-      console.log('Microphone stopped');
-      toast.success('Microphone turned off');
+      // STEP 1: Cleanup WebRTC connections (stops all tracks and closes connections)
+      console.log('STEP 1: Cleaning up WebRTC connections...');
+      peerManager.cleanup();
+      console.log('WebRTC cleanup completed');
       
       // STEP 2: Leave room in Firebase
       console.log('STEP 2: Leaving room in Firebase...');
       await signaling.leaveRoom();
       console.log('Left room in Firebase');
       
-      // STEP 3: Cleanup WebRTC connections
-      console.log('STEP 3: Cleaning up remaining WebRTC connections...');
-      peerManager.cleanup();
-      console.log('WebRTC cleanup completed');
-      
       toast.info('Left audio bubble');
     } catch (error) {
       console.error('Failed to leave room:', error);
       toast.error('Error leaving room');
+      
+      // Ensure cleanup happens even if Firebase fails
+      console.log('Force cleaning up WebRTC connections after error...');
+      peerManager.cleanup();
     } finally {
-      console.log('STEP 4: Calling onLeave()...');
+      console.log('STEP 3: Calling onLeave()...');
       onLeave();
       console.log('=== LEAVE ROOM COMPLETED ===');
     }
