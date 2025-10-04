@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { QrReader } from "react-qr-reader";
 import { Button } from "./ui/button";
 import { X } from "lucide-react";
 import { toast } from "sonner";
@@ -31,38 +30,38 @@ export function QRCodeScanner({ onQRCodeScanned, onClose }: QRCodeScannerProps) 
 
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl p-6 w-full max-w-md">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold">Scan QR Code</h2>
-          <Button onClick={onClose} variant="ghost" size="sm">
-            <X className="h-5 w-5" />
+      <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl p-6 w-full max-w-md">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold">Scan QR Code</h2>
+            <Button onClick={onClose} variant="ghost" size="sm">
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* QR Scanner */}
+          <div className="aspect-square rounded-2xl overflow-hidden mb-4">
+            <QrReader
+                constraints={{ facingMode: "environment" }}
+                onResult={(result, error) => {
+                  if (!!result) handleScan(result);
+                }}
+                videoStyle={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          </div>
+
+          {/* Error display */}
+          {error && (
+              <div className="mb-4 p-4 bg-red-50 rounded-2xl border border-red-200 text-center">
+                <p className="text-red-800 text-sm">{error}</p>
+              </div>
+          )}
+
+          <Button onClick={onClose} variant="outline" className="w-full">
+            Cancel
           </Button>
         </div>
-
-        {/* QR Scanner */}
-        <div className="aspect-square rounded-2xl overflow-hidden mb-4">
-          <QrReader
-            constraints={{ facingMode: "environment" }}
-            onResult={(result, error) => {
-              if (!!result) handleScan(result);
-            }}
-            videoStyle={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
-        </div>
-
-        {/* Error display */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 rounded-2xl border border-red-200 text-center">
-            <p className="text-red-800 text-sm">{error}</p>
-          </div>
-        )}
-
-        <Button onClick={onClose} variant="outline" className="w-full">
-          Cancel
-        </Button>
       </div>
-    </div>
   );
 }
