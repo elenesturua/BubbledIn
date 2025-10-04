@@ -6,6 +6,7 @@ import { AudioControls } from './AudioControls';
 import { ParticipantsList } from './ParticipantsList';
 import { TranscriptionPanel } from './TranscriptionPanel';
 import { StatusAnnouncer, useStatusAnnouncer } from './StatusAnnouncer';
+import { WebRTCDebugger } from './WebRTCDebugger';
 import { 
   Volume2, 
   VolumeX, 
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { signaling, peerManager, type RoomData, type Participant } from '../webrtc';
+import { authService } from '../firebase/auth';
 
 interface AudioBubbleProps {
   roomData: RoomData;
@@ -88,8 +90,47 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         });
 
         // Subscribe to participant updates
-        const unsubscribeParticipants = signaling.onParticipants(roomData.id, (updatedParticipants) => {
+        const unsubscribeParticipants = signaling.onParticipants(roomData.id, async (updatedParticipants) => {
           setParticipants(updatedParticipants);
+          
+          // Handle participant changes
+          const currentParticipantIds = participants.map(p => p.id);
+          const newParticipantIds = updatedParticipants.map(p => p.id);
+          
+          // Find new participants
+          const newParticipants = updatedParticipants.filter(p => 
+            !currentParticipantIds.includes(p.id) && p.id !== authService.getCurrentUserId()
+          );
+          
+          // Find participants who left
+          const leftParticipants = participants.filter(p => 
+            !newParticipantIds.includes(p.id) && p.id !== authService.getCurrentUserId()
+          );
+          
+          // Connect to new participants
+          for (const participant of newParticipants) {
+            try {
+              await peerManager.handleNewParticipant(participant.id);
+              announceJoin(participant.name);
+            } catch (error) {
+              console.error(`Failed to connect to new participant ${participant.id}:`, error);
+            }
+          }
+          
+          // Remove connections for participants who left
+          for (const participant of leftParticipants) {
+            peerManager.handleParticipantLeft(participant.id);
+            announceLeave(participant.name);
+          }
+          
+          // Connect to all existing participants if this is the first time
+          if (participants.length === 0 && updatedParticipants.length > 1) {
+            try {
+              await peerManager.connectToAllParticipants(updatedParticipants);
+            } catch (error) {
+              console.error('Failed to connect to existing participants:', error);
+            }
+          }
         });
 
         // Subscribe to room updates
@@ -211,6 +252,9 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 flex flex-col">
       {/* Status Announcer for accessibility */}
       <StatusAnnouncer message={message} />
+      
+      {/* WebRTC Debugger */}
+      <WebRTCDebugger />
       
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 shadow-sm" role="banner">

@@ -331,6 +331,32 @@ class SignalingService {
   }
 
   /**
+   * Listen for all signaling data for a specific user
+   */
+  onAllSignaling(roomId: string, userId: string, callback: (fromId: string, data: SignalingData) => void): () => void {
+    const signalingRef = collection(db, 'rooms', roomId, 'signaling');
+    
+    const unsubscribe = onSnapshot(signalingRef, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          const docId = change.doc.id;
+          // Check if this document is targeting our user (format: fromId_toId)
+          if (docId.endsWith(`_${userId}`)) {
+            const fromId = docId.split('_')[0];
+            if (fromId !== userId) {
+              const data = change.doc.data() as SignalingData;
+              callback(fromId, data);
+            }
+          }
+        }
+      });
+    });
+
+    this.unsubscribeCallbacks.push(unsubscribe);
+    return unsubscribe;
+  }
+
+  /**
    * Get current participants
    */
   getParticipants(): Participant[] {

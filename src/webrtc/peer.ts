@@ -3,7 +3,7 @@
  * Handles peer connections, media streams, and audio routing
  */
 
-import { signaling, type SignalingData } from './signaling';
+import { signaling, type SignalingData, type Participant } from './signaling';
 import { authService } from '../firebase/auth';
 
 export interface PeerConnection {
@@ -250,30 +250,70 @@ class PeerManager {
   private async setupSignalingListeners(roomId: string): Promise<void> {
     if (!this.currentUserId) return;
 
-    // Listen for offers from other participants
-    const offerUnsubscribe = signaling.onSignaling(roomId, 'other', this.currentUserId, async (data: SignalingData) => {
-      if (data.offer) {
-        await this.handleOffer('other', data.offer);
+    // Listen for all signaling data from other participants
+    const signalingUnsubscribe = signaling.onAllSignaling(roomId, this.currentUserId, async (fromId: string, data: SignalingData) => {
+      try {
+        if (data.offer) {
+          await this.handleOffer(fromId, data.offer);
+        }
+        if (data.answer) {
+          await this.handleAnswer(fromId, data.answer);
+        }
+        if (data.iceCandidates && data.iceCandidates.length > 0) {
+          for (const candidate of data.iceCandidates) {
+            await this.handleIceCandidate(fromId, candidate);
+          }
+        }
+      } catch (error) {
+        console.error(`Error handling signaling from ${fromId}:`, error);
       }
     });
 
-    // Listen for answers from other participants
-    const answerUnsubscribe = signaling.onSignaling(roomId, 'other', this.currentUserId, async (data: SignalingData) => {
-      if (data.answer) {
-        await this.handleAnswer('other', data.answer);
-      }
-    });
+    this.signalingUnsubscribes.push(signalingUnsubscribe);
+  }
 
-    // Listen for ICE candidates from other participants
-    const iceUnsubscribe = signaling.onSignaling(roomId, 'other', this.currentUserId, async (data: SignalingData) => {
-      if (data.iceCandidates && data.iceCandidates.length > 0) {
-        for (const candidate of data.iceCandidates) {
-          await this.handleIceCandidate('other', candidate);
+  /**
+   * Connect to all participants in the room
+   */
+  async connectToAllParticipants(participants: Participant[]): Promise<void> {
+    if (!this.currentUserId) return;
+
+    for (const participant of participants) {
+      if (participant.id !== this.currentUserId && !this.peers.has(participant.id)) {
+        try {
+          await this.connectToParticipant(participant.id);
+          console.log(`Connected to participant: ${participant.id}`);
+        } catch (error) {
+          console.error(`Failed to connect to participant ${participant.id}:`, error);
         }
       }
-    });
+    }
+  }
 
-    this.signalingUnsubscribes.push(offerUnsubscribe, answerUnsubscribe, iceUnsubscribe);
+  /**
+   * Handle new participant joining
+   */
+  async handleNewParticipant(participantId: string): Promise<void> {
+    if (!this.currentUserId || participantId === this.currentUserId) return;
+
+    if (!this.peers.has(participantId)) {
+      try {
+        await this.connectToParticipant(participantId);
+        console.log(`Connected to new participant: ${participantId}`);
+      } catch (error) {
+        console.error(`Failed to connect to new participant ${participantId}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Handle participant leaving
+   */
+  handleParticipantLeft(participantId: string): void {
+    if (this.peers.has(participantId)) {
+      this.removePeer(participantId);
+      console.log(`Removed participant: ${participantId}`);
+    }
   }
 
   /**
