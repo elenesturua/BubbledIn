@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { QrCode, Copy, Share2, Camera, RefreshCw } from 'lucide-react';
-import { Button } from './ui/button';
+import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import QRCodeLib from 'qrcode';
 
@@ -37,26 +36,6 @@ export function QRCodeDisplay({ value, size = 200 }: QRCodeDisplayProps) {
     generateQR();
   }, [value, size]);
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(value);
-    toast.success('Room link copied!');
-  };
-
-  const shareLink = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Join Audio Bubble',
-          text: 'Join our audio bubble room',
-          url: value
-        });
-      } catch (error) {
-        copyToClipboard();
-      }
-    } else {
-      copyToClipboard();
-    }
-  };
 
   // Extract room ID from URL for display
   const roomId = value.includes('?room=') ? value.split('?room=')[1] : 'UNKNOWN';
@@ -81,18 +60,6 @@ export function QRCodeDisplay({ value, size = 200 }: QRCodeDisplayProps) {
           </div>
         </div>
         
-        {/* Action buttons */}
-        <div className="space-y-3">
-          <Button onClick={shareLink} className="w-full" size="lg">
-            <Share2 className="h-4 w-4 mr-2" />
-            Share Room
-          </Button>
-          
-          <Button onClick={copyToClipboard} variant="outline" className="w-full" size="lg">
-            <Copy className="h-4 w-4 mr-2" />
-            Copy Link
-          </Button>
-        </div>
         
         <div className="mt-4 p-3 bg-blue-50 rounded-xl">
           <p className="text-xs text-blue-700">
