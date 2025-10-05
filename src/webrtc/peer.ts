@@ -60,6 +60,9 @@ class PeerManager {
 
     // Set up signaling listeners for existing participants
     await this.setupSignalingListeners(roomId);
+    
+    // Start connection health monitoring
+    this.startConnectionHealthCheck();
   }
 
   /**
@@ -109,18 +112,49 @@ class PeerManager {
       throw new Error('Room not initialized');
     }
 
+    console.log('🔗 Starting connection to participant:', participantId);
+    console.log('   Current user ID:', this.currentUserId);
+    console.log('   Room ID:', this.currentRoomId);
+
+    // Check if connection already exists and is healthy
+    if (this.peers.has(participantId)) {
+      const existingPeer = this.peers.get(participantId);
+      if (existingPeer && existingPeer.peer.connectionState === 'connected') {
+        console.log('✅ Connection to participant already exists and is connected:', participantId);
+        return;
+      } else if (existingPeer) {
+        console.log('🧹 Removing existing unhealthy connection to participant:', participantId);
+        this.removePeer(participantId);
+      }
+    }
+
     // Reset retry attempts for new connection
     this.connectionRetryAttempts.delete(participantId);
     
     // Create peer connection
+    console.log('🔧 Creating peer connection for:', participantId);
     const peerConnection = await this.createPeer(participantId);
+    console.log('✅ Peer connection created for:', participantId);
     
     // Create offer
+    console.log('📝 Creating offer for:', participantId);
+    console.log('   Connection state before offer:', peerConnection.peer.connectionState);
+    console.log('   Signaling state before offer:', peerConnection.peer.signalingState);
+    
+    // Check if connection is in a valid state for creating offers
+    if (peerConnection.peer.signalingState === 'closed') {
+      console.error('❌ Cannot create offer: connection is closed for participant:', participantId);
+      throw new Error('Connection is closed');
+    }
+    
     const offer = await peerConnection.peer.createOffer();
     await peerConnection.peer.setLocalDescription(offer);
+    console.log('✅ Offer created and set for:', participantId);
     
     // Send offer through signaling
+    console.log('📤 Sending offer to:', participantId);
     await signaling.sendOffer(this.currentRoomId, this.currentUserId, participantId, offer);
+    console.log('✅ Offer sent to:', participantId);
   }
 
   /**
@@ -132,32 +166,49 @@ class PeerManager {
       throw new Error('Room not initialized');
     }
 
+    console.log('📥 Received offer from:', fromId);
+
     // Check if peer connection already exists
     if (this.peers.has(fromId)) {
+      console.log('⚠️ Peer connection already exists for:', fromId);
       return;
     }
 
     // Create peer connection
+    console.log('🔧 Creating peer connection for offer from:', fromId);
     const peerConnection = await this.createPeer(fromId);
+    console.log('✅ Peer connection created for offer from:', fromId);
     
     // Set remote description
+    console.log('📝 Setting remote description for:', fromId);
     await peerConnection.peer.setRemoteDescription(offer);
+    console.log('✅ Remote description set for:', fromId);
     
     // Create answer
+    console.log('📝 Creating answer for:', fromId);
     const answer = await peerConnection.peer.createAnswer();
     await peerConnection.peer.setLocalDescription(answer);
+    console.log('✅ Answer created and set for:', fromId);
     
     // Send answer through signaling
+    console.log('📤 Sending answer to:', fromId);
     await signaling.sendAnswer(this.currentRoomId, this.currentUserId, fromId, answer);
+    console.log('✅ Answer sent to:', fromId);
   }
 
   /**
    * Handle incoming answer
    */
   async handleAnswer(fromId: string, answer: RTCSessionDescriptionInit): Promise<void> {
+    console.log('📥 Received answer from:', fromId);
+    
     const peerConnection = this.peers.get(fromId);
     if (peerConnection) {
+      console.log('📝 Setting remote description for answer from:', fromId);
       await peerConnection.peer.setRemoteDescription(answer);
+      console.log('✅ Remote description set for answer from:', fromId);
+    } else {
+      console.error('❌ No peer connection found for participant:', fromId);
     }
   }
 
@@ -165,9 +216,15 @@ class PeerManager {
    * Handle incoming ICE candidate
    */
   async handleIceCandidate(fromId: string, candidate: RTCIceCandidateInit): Promise<void> {
+    console.log('🧊 Received ICE candidate from:', fromId);
+    
     const peerConnection = this.peers.get(fromId);
     if (peerConnection) {
+      console.log('🧊 Adding ICE candidate for:', fromId);
       await peerConnection.peer.addIceCandidate(candidate);
+      console.log('✅ ICE candidate added for:', fromId);
+    } else {
+      console.error('❌ No peer connection found for ICE candidate from:', fromId);
     }
   }
 
@@ -426,11 +483,16 @@ class PeerManager {
   async connectToAllParticipants(participants: Participant[]): Promise<void> {
     if (!this.currentUserId) return;
 
+    console.log('🔗 Connecting to all participants:', participants.length);
+    
     for (const participant of participants) {
-      if (participant.id !== this.currentUserId && !this.peers.has(participant.id)) {
+      if (participant.id !== this.currentUserId) {
+        // Use handleNewParticipant to avoid duplicate connection logic
         try {
-          await this.connectToParticipant(participant.id);
+          console.log('🔗 Ensuring connection to participant:', participant.id);
+          await this.handleNewParticipant(participant.id);
         } catch (error) {
+          console.error('❌ Failed to connect to participant:', participant.id, error);
           // Connection failed, continue with other participants
         }
       }
@@ -443,12 +505,35 @@ class PeerManager {
   async handleNewParticipant(participantId: string): Promise<void> {
     if (!this.currentUserId || participantId === this.currentUserId) return;
 
-    if (!this.peers.has(participantId)) {
-      try {
-        await this.connectToParticipant(participantId);
-      } catch (error) {
-        // Connection failed, continue
+    // Check if we already have a connection
+    if (this.peers.has(participantId)) {
+      const existingPeer = this.peers.get(participantId);
+      if (existingPeer) {
+        const connectionState = existingPeer.peer.connectionState;
+        const iceConnectionState = existingPeer.peer.iceConnectionState;
+        
+        console.log('🔍 Existing connection to participant:', participantId);
+        console.log('   Connection state:', connectionState);
+        console.log('   ICE state:', iceConnectionState);
+        
+        // Only repair if connection is truly unhealthy
+        if (connectionState === 'failed' || connectionState === 'closed' || 
+            iceConnectionState === 'failed' || iceConnectionState === 'closed') {
+          console.log('🔧 Connection is unhealthy, removing and reconnecting:', participantId);
+          this.removePeer(participantId);
+        } else {
+          console.log('✅ Connection to participant is healthy:', participantId);
+          return; // Don't create a new connection
+        }
       }
+    }
+
+    try {
+      console.log('🔗 Connecting to new participant:', participantId);
+      await this.connectToParticipant(participantId);
+    } catch (error) {
+      console.error('❌ Failed to connect to new participant:', participantId, error);
+      // Connection failed, continue
     }
   }
 
@@ -458,6 +543,50 @@ class PeerManager {
   handleParticipantLeft(participantId: string): void {
     if (this.peers.has(participantId)) {
       this.removePeer(participantId);
+    }
+  }
+
+  /**
+   * Start periodic connection health monitoring
+   */
+  private startConnectionHealthCheck(): void {
+    // Check connection health every 30 seconds (less frequent to avoid interference)
+    setInterval(() => {
+      this.checkConnectionHealth();
+    }, 30000);
+  }
+
+  /**
+   * Check and repair unhealthy connections
+   */
+  private async checkConnectionHealth(): Promise<void> {
+    if (!this.currentRoomId || !this.currentUserId) return;
+
+    for (const [participantId, peerConnection] of this.peers) {
+      const connectionState = peerConnection.peer.connectionState;
+      const iceConnectionState = peerConnection.peer.iceConnectionState;
+      
+      // Check if connection is unhealthy
+      if (connectionState === 'failed' || 
+          connectionState === 'disconnected' || 
+          iceConnectionState === 'failed' || 
+          iceConnectionState === 'disconnected') {
+        
+        console.log('🔧 Unhealthy connection detected for participant:', participantId);
+        console.log('   Connection state:', connectionState);
+        console.log('   ICE state:', iceConnectionState);
+        
+        // Remove the unhealthy connection
+        this.removePeer(participantId);
+        
+        // Attempt to reconnect
+        try {
+          console.log('🔄 Attempting to reconnect to participant:', participantId);
+          await this.connectToParticipant(participantId);
+        } catch (error) {
+          console.error('❌ Failed to reconnect to participant:', participantId, error);
+        }
+      }
     }
   }
 

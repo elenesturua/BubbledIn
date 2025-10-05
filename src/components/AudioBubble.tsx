@@ -159,6 +159,9 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         console.log('🏠 Step 3: Initializing room for peer connections...');
         await peerManager.initializeRoom(roomData.id);
         
+        // Wait a moment for initialization to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         // Mark as connected since we've successfully joined the room
         console.log('✅ Successfully joined room, updating connection status');
         setConnectionStatus('connected');
@@ -250,12 +253,28 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
               announceLeave(participant.name);
             }
             
-            // Connect to all existing participants if this is the first time
-            if (prevParticipants.length === 0 && updatedParticipants.length > 1) {
+            // Connect to new participants only (with delay to prevent race conditions)
+            for (let i = 0; i < newParticipants.length; i++) {
+              const participant = newParticipants[i];
               try {
+                console.log('🔗 Connecting to new participant:', participant.id);
+                // Add a small delay between connections to prevent race conditions
+                setTimeout(() => {
+                  peerManager.handleNewParticipant(participant.id);
+                }, i * 1000); // 1 second delay between each connection
+              } catch (error) {
+                console.error('Failed to connect to new participant:', participant.id, error);
+              }
+            }
+            
+            // Also ensure we're connected to all existing participants
+            // This handles cases where connections might have failed
+            if (updatedParticipants.length > 1) {
+              try {
+                console.log('🔗 Ensuring connections to all participants:', updatedParticipants.length);
                 peerManager.connectToAllParticipants(updatedParticipants);
               } catch (error) {
-                // Connection failed, continue
+                console.error('Failed to connect to all participants:', error);
               }
             }
             
