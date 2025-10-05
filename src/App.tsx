@@ -105,19 +105,19 @@ export default function App() {
   const getPageInfo = () => {
     switch (currentState) {
       case 'home':
-        return { title: 'Audio Bubbles - Home' };
+        return { title: 'BubbledIn - Home' };
       case 'about':
-        return { title: 'Audio Bubbles - About' };
+        return { title: 'BubbledIn - About' };
       case 'create':
-        return { title: 'Audio Bubbles - Create Room' };
+        return { title: 'BubbledIn - Create Room' };
       case 'join':
-        return { title: 'Audio Bubbles - Join Room' };
+        return { title: 'BubbledIn - Join Room' };
       case 'display-name':
-        return { title: 'Audio Bubbles - Enter Display Name' };
+        return { title: 'BubbledIn - Enter Display Name' };
       case 'bubble':
-        return { title: `Audio Bubbles - ${currentRoom?.name || 'Room'}` };
+        return { title: `BubbledIn - ${currentRoom?.name || 'Room'}` };
       default:
-        return { title: 'Audio Bubbles' };
+        return { title: 'BubbledIn' };
     }
   };
 
