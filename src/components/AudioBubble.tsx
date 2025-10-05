@@ -547,7 +547,13 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
                 <h2 className="font-semibold" id="captions-heading">Live Captions</h2>
               </div>
               <div aria-labelledby="captions-heading">
-                <TranscriptionPanel stream={stream} userId={userId} />
+                <TranscriptionPanel 
+                  roomId={roomData.id}
+                  roomName={roomData.name}
+                  userId={authService.getCurrentUserId() || 'unknown'}
+                  userName="You"
+                  stream={stream}
+                />
               </div>
             </div>
           </div>
