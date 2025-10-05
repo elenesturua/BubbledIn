@@ -16,6 +16,7 @@ interface CreateRoomProps {
 
 export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
   const [roomName, setRoomName] = useState('');
+  const [hostName, setHostName] = useState('');
   const [pushToTalk, setPushToTalk] = useState(false);
   const [transcription, setTranscription] = useState(true);
   const [roomCreated, setRoomCreated] = useState(false);
@@ -32,12 +33,17 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
       return;
     }
 
+    if (!hostName.trim()) {
+      toast.error('Please enter your name');
+      return;
+    }
+
     setIsCreating(true);
     try {
       const newRoomData = await signaling.createRoom(roomName, {
         pushToTalk,
         transcription
-      });
+      }, hostName.trim());
       
       setRoomData(newRoomData);
       setRoomCreated(true);
@@ -194,6 +200,18 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
           />
         </div>
 
+        {/* Host Name */}
+        <div className="space-y-3">
+          <Label htmlFor="hostName" className="text-lg">Your Name</Label>
+          <Input
+            id="hostName"
+            placeholder="e.g., John Doe"
+            value={hostName}
+            onChange={(e) => setHostName(e.target.value)}
+            className="h-12 text-lg rounded-2xl border-2"
+          />
+        </div>
+
         {/* Settings */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-5">
           <h3 className="font-semibold text-lg">Audio Settings</h3>
@@ -223,7 +241,7 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
             onClick={createRoom} 
             className="w-full h-14 text-lg rounded-2xl shadow-md" 
             size="lg"
-            disabled={!roomName.trim() || isCreating}
+            disabled={!roomName.trim() || !hostName.trim() || isCreating}
           >
             {isCreating ? 'Creating...' : 'Create Audio Bubble'}
           </Button>

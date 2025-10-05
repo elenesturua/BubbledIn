@@ -68,7 +68,7 @@ class SignalingService {
   /**
    * Create a new room
    */
-  async createRoom(name: string, settings: RoomData['settings']): Promise<RoomData> {
+  async createRoom(name: string, settings: RoomData['settings'], hostName: string = 'You'): Promise<RoomData> {
     try {
       console.log('🏠 Creating room:', name);
       
@@ -108,7 +108,7 @@ class SignalingService {
 
       // Add host as first participant
       console.log('👑 Adding host as first participant...');
-      await this.addParticipant(roomId, userId, 'You', true);
+      await this.addParticipant(roomId, userId, hostName, true);
       console.log('✅ Host added as participant');
 
       this.currentRoom = roomData;
@@ -225,6 +225,28 @@ class SignalingService {
     } catch (error) {
       console.error('Failed to update speaking status:', error);
     }
+  }
+
+  /**
+   * Update participant display name
+   */
+  async updateParticipantName(roomId: string, participantId: string, displayName: string): Promise<void> {
+    try {
+      console.log('📝 Updating participant name:', participantId, 'to:', displayName);
+      const participantRef = doc(db, 'rooms', roomId, 'participants', participantId);
+      await updateDoc(participantRef, { name: displayName });
+      console.log('✅ Participant name updated successfully');
+    } catch (error) {
+      console.error('Failed to update participant name:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get current user ID
+   */
+  getCurrentUserId(): string | null {
+    return authService.getCurrentUserId();
   }
 
   /**
