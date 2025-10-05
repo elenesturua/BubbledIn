@@ -14,9 +14,22 @@ interface TranscriptionPanelProps {
   userName: string;
   stream: MediaStream | null;
   isTranscribing?: boolean;
+  isMuted?: boolean;
+  isPushToTalk?: boolean;
+  isPushToTalkPressed?: boolean;
 }
 
-export function TranscriptionPanel({ roomId, roomName, userId, userName, stream, isTranscribing: externalIsTranscribing }: TranscriptionPanelProps) {
+export function TranscriptionPanel({ 
+  roomId, 
+  roomName, 
+  userId, 
+  userName, 
+  stream, 
+  isTranscribing: externalIsTranscribing,
+  isMuted = false,
+  isPushToTalk = false,
+  isPushToTalkPressed = false
+}: TranscriptionPanelProps) {
   const [transcriptions, setTranscriptions] = useState<TranscriptionEntry[]>([]);
   const [currentSpeakers, setCurrentSpeakers] = useState<Set<string>>(new Set());
   const [summary, setSummary] = useState<RoomSummary | null>(null);
@@ -163,13 +176,23 @@ export function TranscriptionPanel({ roomId, roomName, userId, userName, stream,
         <div className="flex items-center space-x-3">
           <div className={`w-3 h-3 rounded-full ${
             currentSpeakers.size > 0 ? 'bg-green-500 animate-pulse' : 
-            isTranscribing ? 'bg-red-500' : 'bg-gray-400'
+            isTranscribing 
+              ? isPushToTalk
+                ? 'bg-gray-500'
+                : isMuted 
+                  ? 'bg-yellow-500' 
+                  : 'bg-red-500' 
+              : 'bg-gray-400'
           }`} />
           <span className="font-medium text-sm">
             {currentSpeakers.size > 0
               ? `${Array.from(currentSpeakers).join(', ')} speaking...`
               : isTranscribing
-              ? 'Live Captions Active'
+              ? isPushToTalk
+                ? 'Live Captions Disabled (PTT)'
+                : isMuted
+                  ? 'Live Captions Muted'
+                  : 'Live Captions Active'
               : 'Stopped'}
           </span>
           {currentSpeakers.size > 0 && (
