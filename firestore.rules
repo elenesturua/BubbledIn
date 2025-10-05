@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Rooms
+    match /rooms/{roomId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null;
+      
+      // Participants
+      match /participants/{participantId} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
+      
+      // Transcriptions (NEW - for speech-to-text)
+      match /transcriptions/{transcriptionId} {
+        allow read: if true;
+        allow create: if request.auth != null;
+      }
+      
+      // Summaries (NEW - for AI summaries)
+      match /summary/{summaryId} {
+        allow read: if true;
+        allow create: if request.auth != null;
+      }
+      
+      // Signaling
+      match /signaling/{signalingId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+  }
+}
+
