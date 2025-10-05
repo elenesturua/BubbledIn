@@ -4,7 +4,6 @@ import { Input } from './ui/input';
 import { ArrowLeft, Camera, Loader2, Scan, Hash } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeScanner } from './QRCodeScanner';
-import { DisplayNameModal } from './DisplayNameModal';
 import { signaling } from '../webrtc/signaling';
 
 interface JoinRoomProps {
@@ -17,8 +16,6 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
   const [isJoining, setIsJoining] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'code'>('scan');
   const [showQRScanner, setShowQRScanner] = useState(false);
-  const [showDisplayNameModal, setShowDisplayNameModal] = useState(false);
-  const [pendingRoomData, setPendingRoomData] = useState<any>(null);
 
   const joinByCode = async () => {
     if (!roomCode.trim()) {
@@ -40,9 +37,8 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
         url: roomData.url,
       };
 
-      // Store room data and show display name modal
-      setPendingRoomData(roomDataForUI);
-      setShowDisplayNameModal(true);
+      // Navigate to display name page
+      onRoomJoined(roomDataForUI);
       toast.success(`Room "${roomData.name}" found! Please enter your display name.`);
     } catch (error) {
       console.error('Failed to join room:', error);
@@ -70,9 +66,8 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
           url: roomData.url,
         };
 
-        // Store room data and show display name modal
-        setPendingRoomData(roomDataForUI);
-        setShowDisplayNameModal(true);
+        // Navigate to display name page
+        onRoomJoined(roomDataForUI);
         setShowQRScanner(false);
         toast.success(`Room "${roomData.name}" found! Please enter your display name.`);
       } catch (error) {
@@ -84,33 +79,6 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
     }
   };
 
-  const handleDisplayNameConfirm = async (displayName: string) => {
-    if (pendingRoomData) {
-      // Update the participant's display name in Firebase
-      try {
-        const userId = await signaling.getCurrentUserId();
-        if (userId) {
-          await signaling.updateParticipantName(pendingRoomData.id, userId, displayName);
-        }
-        
-        onRoomJoined(pendingRoomData);
-        toast.success(`Joined "${pendingRoomData.name}" as ${displayName}!`);
-      } catch (error) {
-        console.error('Failed to update display name:', error);
-        // Still proceed with joining even if name update fails
-        onRoomJoined(pendingRoomData);
-        toast.success(`Joined "${pendingRoomData.name}" successfully!`);
-      }
-    }
-    
-    setShowDisplayNameModal(false);
-    setPendingRoomData(null);
-  };
-
-  const handleDisplayNameCancel = () => {
-    setShowDisplayNameModal(false);
-    setPendingRoomData(null);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50">
@@ -227,12 +195,6 @@ export function JoinRoom({ onBack, onRoomJoined }: JoinRoomProps) {
         />
       )}
 
-      {/* Display Name Modal */}
-      <DisplayNameModal
-        isOpen={showDisplayNameModal}
-        onConfirm={handleDisplayNameConfirm}
-        onCancel={handleDisplayNameCancel}
-      />
     </div>
   );
 }

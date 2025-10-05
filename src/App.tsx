@@ -10,12 +10,11 @@ import { signaling } from './webrtc/signaling';
 import { DebugHelper } from './components/DebugHelper';
 import { toast } from 'sonner';
 
-type AppState = 'home' | 'about' | 'create' | 'join' | 'bubble';
+type AppState = 'home' | 'about' | 'create' | 'join' | 'display-name' | 'bubble';
 
 export default function App() {
   const [currentState, setCurrentState] = useState<AppState>('home');
   const [currentRoom, setCurrentRoom] = useState<any>(null);
-  const [showDisplayNameModal, setShowDisplayNameModal] = useState(false);
   const [pendingRoomData, setPendingRoomData] = useState<any>(null);
 
   // Handle URL parameters for direct room joining
@@ -35,9 +34,9 @@ export default function App() {
             url: roomData.url
           };
           
-          // Show display name modal for URL-based joins
+          // Navigate to display name page for URL-based joins
           setPendingRoomData(roomDataForUI);
-          setShowDisplayNameModal(true);
+          setCurrentState('display-name');
           toast.success(`Room "${roomData.name}" found! Please enter your display name.`);
         })
         .catch(error => {
@@ -67,8 +66,8 @@ export default function App() {
   };
 
   const handleRoomJoined = (roomData: any) => {
-    setCurrentRoom(roomData);
-    setCurrentState('bubble');
+    setPendingRoomData(roomData);
+    setCurrentState('display-name');
   };
 
   const handleBackToHome = () => {
@@ -102,12 +101,10 @@ export default function App() {
       }
     }
     
-    setShowDisplayNameModal(false);
     setPendingRoomData(null);
   };
 
   const handleDisplayNameCancel = () => {
-    setShowDisplayNameModal(false);
     setPendingRoomData(null);
     setCurrentState('home');
   };
@@ -123,6 +120,8 @@ export default function App() {
         return { title: 'Audio Bubbles - Create Room' };
       case 'join':
         return { title: 'Audio Bubbles - Join Room' };
+      case 'display-name':
+        return { title: 'Audio Bubbles - Enter Display Name' };
       case 'bubble':
         return { title: `Audio Bubbles - ${currentRoom?.name || 'Room'}` };
       default:
@@ -171,6 +170,18 @@ export default function App() {
           />
         )}
 
+        {currentState === 'display-name' && pendingRoomData && (
+          <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md">
+              <DisplayNameModal
+                isOpen={true}
+                onConfirm={handleDisplayNameConfirm}
+                onCancel={handleDisplayNameCancel}
+              />
+            </div>
+          </div>
+        )}
+
         {currentState === 'bubble' && currentRoom && (
           <AudioBubble 
             roomData={currentRoom}
@@ -186,13 +197,6 @@ export default function App() {
       
       {/* Live region for announcements */}
       <div aria-live="polite" aria-atomic="true" className="sr-only" id="announcements" />
-
-      {/* Display Name Modal */}
-      <DisplayNameModal
-        isOpen={showDisplayNameModal}
-        onConfirm={handleDisplayNameConfirm}
-        onCancel={handleDisplayNameCancel}
-      />
     </div>
   );
 }
