@@ -6,6 +6,7 @@ import { AudioControls } from './AudioControls';
 import { ParticipantsList } from './ParticipantsList';
 import { TranscriptionPanel } from './TranscriptionPanel';
 import { StatusAnnouncer, useStatusAnnouncer } from './StatusAnnouncer';
+import { QRCodeDisplay } from './QRCodeDisplay';
 import { 
   Volume2, 
   VolumeX, 
@@ -36,6 +37,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const [isPushToTalkPressed, setIsPushToTalkPressed] = useState(false);
   const [showTranscription, setShowTranscription] = useState(false);
   const [activeTab, setActiveTab] = useState<'audio' | 'participants' | 'captions'>('audio');
+  const [showQRCode, setShowQRCode] = useState(false);
   
   // Web Speech API state for transcription
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -315,29 +317,9 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     initializeConnection();
   }, [roomData.id]); // Only depend on roomData.id, not the functions
 
-  const shareRoom = async () => {
-    const shareData = {
-      title: `Join ${roomData.name}`,
-      text: `Join our audio bubble: ${roomData.name}`,
-      url: `${window.location.origin}?room=${roomData.id}`
-    };
-
-    announce('Sharing room information');
-    
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-        announce('Room shared successfully');
-      } catch (error) {
-        navigator.clipboard.writeText(`Join ${roomData.name}\nCode: ${roomData.id}`);
-        announce('Room information copied to clipboard');
-        toast.success('Room info copied!');
-      }
-    } else {
-      navigator.clipboard.writeText(`Join ${roomData.name}\nCode: ${roomData.id}`);
-      announce('Room information copied to clipboard');
-      toast.success('Room info copied!');
-    }
+  const toggleQRCode = () => {
+    setShowQRCode(!showQRCode);
+    announce(showQRCode ? 'QR code hidden' : 'QR code shown');
     vibrate(100);
   };
 
@@ -485,11 +467,11 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
           
           <div className="flex items-center space-x-2" role="toolbar" aria-label="Room actions">
             <Button 
-              onClick={shareRoom} 
+              onClick={toggleQRCode} 
               variant="ghost" 
               size="sm" 
               className="p-2 focus-ring touch-target"
-              aria-label="Share room information"
+              aria-label="Show QR code for room"
             >
               <Share2 className="h-4 w-4" aria-hidden="true" />
             </Button>
@@ -652,6 +634,31 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
           </button>
         </div>
       </nav>
+
+      {/* QR Code Display */}
+      {showQRCode && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full relative">
+            <button
+              onClick={() => setShowQRCode(false)}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 focus-ring"
+              aria-label="Close QR code"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="text-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Join Room</h3>
+              <p className="text-sm text-gray-600">{roomData.name}</p>
+            </div>
+            <QRCodeDisplay 
+              value={`${window.location.origin}?room=${roomData.id}`}
+              size={250}
+            />
+          </div>
+        </div>
+      )}
 
     </div>
   );

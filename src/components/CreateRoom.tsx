@@ -112,47 +112,6 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
             <QRCodeDisplay value={roomData.url} size={240} />
           </div>
 
-          {/* Share Actions */}
-          <div className="space-y-3">
-            <Button 
-              onClick={shareRoom} 
-              className="w-full h-12 rounded-2xl"
-              size="lg"
-            >
-              <Share2 className="h-5 w-5 mr-3" />
-              Share Room
-            </Button>
-            
-            <Button 
-              onClick={copyRoomLink} 
-              variant="outline" 
-              className="w-full h-12 rounded-2xl border-2"
-              size="lg"
-            >
-              <Copy className="h-5 w-5 mr-3" />
-              Copy Link
-            </Button>
-          </div>
-
-          {/* Settings Summary */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <h3 className="font-semibold mb-4">Room Settings</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Push to Talk</span>
-                <span className={`text-sm font-medium ${pushToTalk ? 'text-green-600' : 'text-gray-400'}`}>
-                  {pushToTalk ? 'On' : 'Off'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Live Captions</span>
-                <span className={`text-sm font-medium ${transcription ? 'text-green-600' : 'text-gray-400'}`}>
-                  {transcription ? 'On' : 'Off'}
-                </span>
-              </div>
-            </div>
-          </div>
-
           <div className="space-y-3">
             <Button 
               onClick={() => onRoomCreated(roomData)} 
@@ -160,15 +119,6 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
               size="lg"
             >
               Enter Audio Bubble
-            </Button>
-            
-            <Button 
-              onClick={onBack}
-              variant="ghost" 
-              className="w-full h-12 rounded-2xl text-gray-600 hover:text-gray-800"
-              size="lg"
-            >
-              Create Another Room
             </Button>
           </div>
         </div>
@@ -243,7 +193,7 @@ export function CreateRoom({ onBack, onRoomCreated }: CreateRoomProps) {
             size="lg"
             disabled={!roomName.trim() || !hostName.trim() || isCreating}
           >
-            {isCreating ? 'Creating...' : 'Create Audio Bubble'}
+            {isCreating ? 'Creating...' : 'Create Bubble'}
           </Button>
         </div>
       </div>
