@@ -172,7 +172,7 @@ export function TranscriptionPanel({
   return (
     <div className="h-full flex flex-col space-y-4">
       {/* Status & Controls */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center space-x-3">
           <div className={`w-3 h-3 rounded-full ${
             currentSpeakers.size > 0 ? 'bg-green-500 animate-pulse' : 
@@ -200,24 +200,26 @@ export function TranscriptionPanel({
           )}
         </div>
         
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap gap-2">
           <Button 
             onClick={generateSummary} 
             variant="outline" 
             size="sm"
             disabled={transcriptions.filter(t => t.isFinal).length === 0 || isGeneratingSummary}
-            className="h-8"
+            className="h-8 text-xs sm:text-sm"
             title="Generate AI summary of the conversation"
           >
             {isGeneratingSummary ? (
               <>
                 <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                Generating...
+                <span className="hidden sm:inline">Generating...</span>
+                <span className="sm:hidden">Gen...</span>
               </>
             ) : (
               <>
                 <Sparkles className="h-3 w-3 mr-1" />
-                AI Summary
+                <span className="hidden sm:inline">AI Summary</span>
+                <span className="sm:hidden">AI</span>
               </>
             )}
           </Button>
@@ -226,40 +228,40 @@ export function TranscriptionPanel({
             variant="outline" 
             size="sm"
             disabled={transcriptions.filter(t => t.isFinal).length === 0}
-            className="h-8"
+            className="h-8 text-xs sm:text-sm"
             title="Share transcript"
           >
             <Share2 className="h-3 w-3 mr-1" />
-            Share
+            <span className="hidden sm:inline">Share</span>
           </Button>
           <Button 
             onClick={downloadTranscript} 
             variant="outline" 
             size="sm"
             disabled={transcriptions.filter(t => t.isFinal).length === 0}
-            className="h-8"
+            className="h-8 text-xs sm:text-sm"
             title="Download transcript as text file"
           >
             <Download className="h-3 w-3 mr-1" />
-            Save
+            <span className="hidden sm:inline">Save</span>
           </Button>
         </div>
       </div>
 
       {/* AI Summary Card */}
       {summary && (
-        <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-2xl p-4 border border-purple-200">
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-2xl p-3 sm:p-4 border border-purple-200">
           <div className="flex items-center space-x-2 mb-3">
             <Sparkles className="h-4 w-4 text-purple-600" />
-            <h3 className="font-semibold text-purple-900">AI Summary</h3>
+            <h3 className="font-semibold text-purple-900 text-sm sm:text-base">AI Summary</h3>
           </div>
-          <p className="text-sm text-gray-700 mb-3 leading-relaxed">{summary.summary}</p>
+          <p className="text-xs sm:text-sm text-gray-700 mb-3 leading-relaxed">{summary.summary}</p>
           
           {summary.keyPoints.length > 0 && (
             <div className="space-y-1 mb-3">
               <p className="text-xs font-medium text-gray-600">🎯 Key Points:</p>
               {summary.keyPoints.map((point, idx) => (
-                <p key={idx} className="text-xs text-gray-600 pl-2">• {point}</p>
+                <p key={idx} className="text-xs text-gray-600 pl-2 break-words">• {point}</p>
               ))}
             </div>
           )}
@@ -268,12 +270,12 @@ export function TranscriptionPanel({
             <div className="space-y-1 mb-3">
               <p className="text-xs font-medium text-gray-600">✅ Action Items:</p>
               {summary.actionItems.map((item, idx) => (
-                <p key={idx} className="text-xs text-gray-600 pl-2">• {item}</p>
+                <p key={idx} className="text-xs text-gray-600 pl-2 break-words">• {item}</p>
               ))}
             </div>
           )}
           
-          <div className="flex items-center space-x-4 mt-3 text-xs text-gray-500 pt-2 border-t border-purple-200">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-3 text-xs text-gray-500 pt-2 border-t border-purple-200">
             <span>👥 {summary.participants.length} participant{summary.participants.length !== 1 ? 's' : ''}</span>
             <span>💬 {summary.totalMessages} message{summary.totalMessages !== 1 ? 's' : ''}</span>
             <span>⏱️ {summary.duration}</span>
@@ -283,65 +285,78 @@ export function TranscriptionPanel({
 
       {/* Transcriptions Display */}
       <div className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full w-full border rounded-2xl p-4 bg-gray-50" ref={scrollRef}>
-          {transcriptions.filter(t => t.isFinal).length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-gray-500">
-              <div className="text-center space-y-3">
-                <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse mx-auto" />
-                <p className="text-sm">Listening for speech...</p>
-                <p className="text-xs">Start talking and your words will appear here</p>
+        <div 
+          className="max-h-80 sm:max-h-96 border rounded-2xl bg-gray-50 overflow-y-auto" 
+          style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: '#9CA3AF #F3F4F6',
+            maxHeight: '24rem'
+          }}
+          ref={scrollRef}
+        >
+          <div className="p-3 sm:p-4">
+            {transcriptions.filter(t => t.isFinal).length === 0 ? (
+              <div className="flex items-center justify-center h-24 sm:h-32 text-gray-500">
+                <div className="text-center space-y-2 sm:space-y-3">
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-red-500 rounded-full animate-pulse mx-auto" />
+                  <p className="text-xs sm:text-sm">Listening for speech...</p>
+                  <p className="text-xs">Start talking and your words will appear here</p>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {transcriptions.filter(t => t.isFinal).map((transcript) => (
-                <div key={transcript.id} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-medium text-sm">{transcript.userName}</span>
-                      {transcript.userId === userId && (
-                        <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800">You</Badge>
-                      )}
-                      <Badge 
-                        variant="secondary" 
-                        className={`text-xs ${getConfidenceColor(transcript.confidence)}`}
-                      >
-                        {Math.round(transcript.confidence * 100)}%
-                      </Badge>
+            ) : (
+              <div className="space-y-3 sm:space-y-4">
+                {transcriptions.filter(t => t.isFinal).map((transcript) => (
+                  <div key={transcript.id} className="space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0">
+                      <div className="flex items-center space-x-2 flex-wrap">
+                        <span className="font-medium text-xs sm:text-sm">{transcript.userName}</span>
+                        {transcript.userId === userId && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800">You</Badge>
+                        )}
+                        <Badge 
+                          variant="secondary" 
+                          className={`text-xs ${getConfidenceColor(transcript.confidence)}`}
+                        >
+                          {Math.round(transcript.confidence * 100)}%
+                        </Badge>
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {transcript.timestamp?.toDate 
+                          ? new Date(transcript.timestamp.toDate()).toLocaleTimeString() 
+                          : 'N/A'}
+                      </span>
                     </div>
-                    <span className="text-xs text-gray-500">
-                      {transcript.timestamp?.toDate 
-                        ? new Date(transcript.timestamp.toDate()).toLocaleTimeString() 
-                        : 'N/A'}
-                    </span>
+                    <div className="bg-white p-2 sm:p-3 rounded-xl border-l-4 border-blue-200 shadow-sm">
+                      <p className="text-xs sm:text-sm leading-relaxed break-words">{transcript.text}</p>
+                    </div>
                   </div>
-                  <div className="bg-white p-3 rounded-xl border-l-4 border-blue-200 shadow-sm">
-                    <p className="text-sm leading-relaxed">{transcript.text}</p>
+                ))}
+                
+                {/* Typing indicator */}
+                {isTranscribing && currentSpeakers.size === 0 && (
+                  <div className="flex items-center space-x-3 text-gray-500 py-2">
+                    <div className="flex space-x-1">
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gray-400 rounded-full animate-bounce" />
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                    </div>
+                    <span className="text-xs sm:text-sm">Listening...</span>
                   </div>
-                </div>
-              ))}
-              
-              {/* Typing indicator */}
-              {isTranscribing && currentSpeakers.size === 0 && (
-                <div className="flex items-center space-x-3 text-gray-500 py-2">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                  </div>
-                  <span className="text-sm">Listening...</span>
-                </div>
-              )}
-            </div>
-          )}
-        </ScrollArea>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Info */}
-      <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-2xl space-y-1">
-        <p>🎙️ Real-time speech-to-text powered by Web Speech API (built into your browser)</p>
-        <p>🤖 AI summaries by Gemini • 📊 Confidence scores show accuracy</p>
-        <p>💬 All participants see each other's transcriptions in real-time via Firestore</p>
+      <div className="text-xs text-gray-500 bg-gray-50 p-2 sm:p-3 rounded-2xl space-y-1">
+        <p className="hidden sm:block">🎙️ Real-time speech-to-text powered by Web Speech API (built into your browser)</p>
+        <p className="sm:hidden">🎙️ Real-time speech-to-text</p>
+        <p className="hidden sm:block">🤖 AI summaries by Gemini • 📊 Confidence scores show accuracy</p>
+        <p className="sm:hidden">🤖 AI summaries • 📊 Confidence scores</p>
+        <p className="hidden sm:block">💬 All participants see each other's transcriptions in real-time via Firestore</p>
+        <p className="sm:hidden">💬 Real-time transcriptions for all participants</p>
       </div>
     </div>
   );

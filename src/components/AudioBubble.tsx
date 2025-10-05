@@ -123,7 +123,12 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     } else if (!isTranscribing && !isTranscriptionMuted && stream && roomData?.settings?.transcription !== false) {
       // Start transcription when unmuted and not already transcribing
       console.log('🎤 Starting transcription due to unmute state');
-      const userName = (roomData as any).displayName || 'You';
+      
+      // Get the current user's name from participants list or fallback to displayName
+      const currentUserId = authService.getCurrentUserId();
+      const currentParticipant = participants.find(p => p.id === currentUserId);
+      const userName = currentParticipant?.name || (roomData as any).displayName || 'You';
+      
       transcriptionService.startTranscription(roomData.id, userName, stream)
         .then(() => {
           setIsTranscribing(true);
@@ -133,7 +138,29 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
           console.warn('⚠️ Failed to start transcription:', error);
         });
     }
-  }, [isTranscriptionMuted, isTranscribing, stream, roomData]);
+  }, [isTranscriptionMuted, isTranscribing, stream, roomData, participants]);
+
+  // Handle participant name changes - restart transcription with new name
+  useEffect(() => {
+    if (isTranscribing && stream && !isTranscriptionMuted && roomData?.settings?.transcription !== false) {
+      const currentUserId = authService.getCurrentUserId();
+      const currentParticipant = participants.find(p => p.id === currentUserId);
+      const newUserName = currentParticipant?.name || (roomData as any).displayName || 'You';
+      
+      // Check if the name has changed and restart transcription
+      if (currentParticipant?.name && currentParticipant.name !== 'You') {
+        console.log('🎤 Participant name changed, restarting transcription with new name:', newUserName);
+        transcriptionService.stopTranscription();
+        transcriptionService.startTranscription(roomData.id, newUserName, stream)
+          .then(() => {
+            console.log('✅ Transcription restarted with new participant name');
+          })
+          .catch((error) => {
+            console.warn('⚠️ Failed to restart transcription with new name:', error);
+          });
+      }
+    }
+  }, [participants, isTranscribing, stream, isTranscriptionMuted, roomData]);
 
   useEffect(() => {
     // Initialize WebRTC connection AND Web Speech API
@@ -189,7 +216,12 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
             if (roomData.settings?.transcription !== false && !isTranscriptionMuted) {
               try {
                 console.log('🎤 Starting Live Captions by Gemini...');
-                const userName = (roomData as any).displayName || 'You';
+                
+                // Get the current user's name from participants list or fallback to displayName
+                const currentUserId = authService.getCurrentUserId();
+                const currentParticipant = participants.find(p => p.id === currentUserId);
+                const userName = currentParticipant?.name || (roomData as any).displayName || 'You';
+                
                 await transcriptionService.startTranscription(roomData.id, userName, mediaStream);
                 setIsTranscribing(true);
                 console.log('✅ Live Captions started successfully');
@@ -645,21 +677,25 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
 
         {activeTab === 'captions' && roomData.settings?.transcription !== false && (
           <div 
-            className="p-4 h-full overflow-y-auto"
+            className="p-2 sm:p-4 h-full overflow-hidden"
             role="tabpanel"
             id="captions-panel"
             aria-labelledby="captions-tab"
           >
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 h-full">
-              <div className="mb-4">
-                <h2 className="font-semibold" id="captions-heading">Live Captions</h2>
+            <div className="bg-white rounded-2xl p-2 sm:p-4 shadow-sm border border-gray-100 h-full flex flex-col">
+              <div className="mb-2 sm:mb-4 flex-shrink-0">
+                <h2 className="font-semibold text-sm sm:text-base" id="captions-heading">Live Captions</h2>
               </div>
-              <div aria-labelledby="captions-heading">
+              <div className="flex-1 min-h-0" aria-labelledby="captions-heading">
                 <TranscriptionPanel 
                   roomId={roomData.id}
                   roomName={roomData.name}
                   userId={authService.getCurrentUserId() || 'unknown'}
-                  userName="You"
+                  userName={(() => {
+                    const currentUserId = authService.getCurrentUserId();
+                    const currentParticipant = participants.find(p => p.id === currentUserId);
+                    return currentParticipant?.name || (roomData as any).displayName || 'You';
+                  })()}
                   stream={stream}
                   isTranscribing={isTranscribing}
                   isMuted={isTranscriptionMuted}
