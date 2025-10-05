@@ -1,15 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
-import { WifiSignal } from './ui/wifi-signal';
 import { 
   Mic, 
   MicOff, 
-  Volume2, 
-  VolumeX, 
-  Radio,
   KeyRound,
   Hand
 } from 'lucide-react';
@@ -34,24 +30,6 @@ export function AudioControls({
   onPushToTalkPress
 }: AudioControlsProps) {
   const [isTouchPressed, setIsTouchPressed] = useState(false);
-  const [wifiStrength, setWifiStrength] = useState<'excellent' | 'good' | 'fair' | 'poor' | 'disconnected'>('good');
-
-  // Simulate WiFi strength variations
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const strengths = ['excellent', 'good', 'fair', 'poor'] as const;
-      const randomStrength = strengths[Math.floor(Math.random() * strengths.length)];
-      // Occasionally simulate disconnection
-      if (Math.random() < 0.05) {
-        setWifiStrength('disconnected');
-        setTimeout(() => setWifiStrength('good'), 2000);
-      } else {
-        setWifiStrength(randomStrength);
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   const isMicActive = !isMuted && (!isPushToTalk || isTouchPressed);
 
@@ -72,7 +50,7 @@ export function AudioControls({
       <h2 id="audio-controls-heading" className="sr-only">Audio Controls</h2>
 
       {/* Main Mic Control */}
-      <div className="flex items-center justify-center space-x-4" role="group" aria-labelledby="mic-control-heading">
+      <div className="flex items-center justify-center" role="group" aria-labelledby="mic-control-heading">
         <h3 id="mic-control-heading" className="sr-only">Microphone Control</h3>
         
         <div className="flex flex-col items-center space-y-4">
@@ -135,46 +113,8 @@ export function AudioControls({
           </div>
         </div>
 
-        {/* WiFi Signal Indicator */}
-        <div className="flex flex-col items-center space-y-2" role="img" aria-labelledby="wifi-label">
-          <WifiSignal strength={wifiStrength} />
-          <p className="text-xs text-gray-500 text-center" id="wifi-label">
-            Connection: {wifiStrength}
-          </p>
-        </div>
       </div>
 
-      {/* Volume Control */}
-      <div className="space-y-4" role="group" aria-labelledby="volume-control-heading">
-        <h3 id="volume-control-heading" className="sr-only">Volume Control</h3>
-        
-        <div className="flex items-center justify-between">
-          <Label className="flex items-center space-x-2 text-base" htmlFor="volume-slider">
-            {volume > 0 ? (
-              <Volume2 className="h-5 w-5" aria-hidden="true" />
-            ) : (
-              <VolumeX className="h-5 w-5" aria-hidden="true" />
-            )}
-            <span>Volume</span>
-          </Label>
-          <span 
-            className="text-sm text-gray-500 font-medium" 
-            aria-live="polite"
-            aria-label={`Current volume: ${volume} percent`}
-          >
-            {volume}%
-          </span>
-        </div>
-        <Slider
-          id="volume-slider"
-          value={[volume]}
-          onValueChange={(value) => onVolumeChange(value[0])}
-          max={100}
-          step={5}
-          className="w-full"
-          aria-label={`Volume control, currently ${volume}%`}
-        />
-      </div>
 
       {/* Settings */}
       <div className="space-y-6" role="group" aria-labelledby="audio-settings-heading">

@@ -32,7 +32,6 @@ interface AudioBubbleProps {
 export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [volume, setVolume] = useState(75);
   const [isPushToTalk, setIsPushToTalk] = useState(roomData.settings?.pushToTalk || false);
   const [isPushToTalkPressed, setIsPushToTalkPressed] = useState(false);
   const [showTranscription, setShowTranscription] = useState(false);
@@ -356,15 +355,6 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     vibrate(newMutedState ? [100, 50, 100] : 200);
   };
 
-  const handleVolumeChange = (newVolume: number) => {
-    setVolume(newVolume);
-    // Update volume for all participants
-    participants.forEach(participant => {
-      if (participant.id !== 'host' && !participant.isHost) {
-        peerManager.setParticipantVolume(participant.id, newVolume);
-      }
-    });
-  };
 
   const handlePushToTalkPress = (pressed: boolean) => {
     console.log('🎤 PTT Press:', pressed, 'PTT Enabled:', isPushToTalk);
@@ -520,35 +510,15 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
             id="audio-panel"
             aria-labelledby="audio-tab"
           >
-            {/* Connection Status */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100" role="status" aria-live="polite">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div 
-                    className={`w-3 h-3 rounded-full ${
-                      connectionStatus === 'connected' ? 'bg-green-500' : 
-                      connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-                    }`}
-                    role="img"
-                    aria-label={`Connection status: ${connectionStatus}`}
-                  />
-                  <span className="font-medium text-sm">
-                    {connectionStatus === 'connected' ? 'Connected' : 
-                     connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
-                  </span>
-                </div>
-                <span className="text-xs text-gray-500" aria-label="Using WebRTC protocol">WebRTC</span>
-              </div>
-            </div>
 
             {/* Audio Controls */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <AudioControls
                 isMuted={isMuted}
-                volume={volume}
+                volume={75}
                 isPushToTalk={isPushToTalk}
                 onMuteToggle={toggleMute}
-                onVolumeChange={handleVolumeChange}
+                onVolumeChange={() => {}}
                 onPushToTalkToggle={setIsPushToTalk}
                 onPushToTalkPress={handlePushToTalkPress}
               />
