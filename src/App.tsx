@@ -82,23 +82,15 @@ export default function App() {
 
   const handleDisplayNameConfirm = async (displayName: string) => {
     if (pendingRoomData) {
-      // Update the participant's display name in Firebase
-      try {
-        const userId = signaling.getCurrentUserId();
-        if (userId) {
-          await signaling.updateParticipantName(pendingRoomData.id, userId, displayName);
-        }
-        
-        setCurrentRoom(pendingRoomData);
-        setCurrentState('bubble');
-        toast.success(`Joined "${pendingRoomData.name}" as ${displayName}!`);
-      } catch (error) {
-        console.error('Failed to update display name:', error);
-        // Still proceed with joining even if name update fails
-        setCurrentRoom(pendingRoomData);
-        setCurrentState('bubble');
-        toast.success(`Joined "${pendingRoomData.name}" successfully!`);
-      }
+      // Store the display name in the room data for later use
+      const roomDataWithDisplayName = {
+        ...pendingRoomData,
+        displayName: displayName
+      };
+      
+      setCurrentRoom(roomDataWithDisplayName);
+      setCurrentState('bubble');
+      toast.success(`Joined "${pendingRoomData.name}" as ${displayName}!`);
     }
     
     setPendingRoomData(null);

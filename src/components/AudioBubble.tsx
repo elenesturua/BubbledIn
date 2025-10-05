@@ -164,6 +164,18 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         announceConnect(true);
         console.log('🟢 Connection status set to connected - user is now in the room');
         
+        // Update participant display name if provided
+        if ((roomData as any).displayName) {
+          try {
+            console.log('📝 Updating participant display name to:', (roomData as any).displayName);
+            await signaling.updateParticipantName(roomData.id, userId, (roomData as any).displayName);
+            console.log('✅ Participant display name updated successfully');
+          } catch (error) {
+            console.error('Failed to update participant display name:', error);
+            // Don't throw error, just log it - the connection should still work
+          }
+        }
+        
         // Set up peer manager callbacks
         console.log('📞 Step 4: Setting up peer manager callbacks...');
         peerManager.setCallbacks({
