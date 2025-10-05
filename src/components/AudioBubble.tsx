@@ -50,6 +50,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   
   // Transcription state
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isTranscriptionMuted, setIsTranscriptionMuted] = useState(false);
   
   // Refs to store unsubscribe functions
   const unsubscribeParticipantsRef = useRef<(() => void) | null>(null);
@@ -84,23 +85,55 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
       const shouldBeMuted = !isPushToTalkPressed;
       console.log('🎤 PTT enabled, setting mic muted to:', shouldBeMuted);
       peerManager.setMuted(shouldBeMuted);
+      
+      // Disable Live Captions completely when PTT is enabled
+      setIsTranscriptionMuted(true);
     } else {
       // PTT is disabled, restore normal mute state
       console.log('🎤 PTT disabled, restoring mute state to:', isMuted);
       peerManager.setMuted(isMuted);
+      
+      // Also restore Live Captions mute state
+      setIsTranscriptionMuted(isMuted);
     }
-  }, [isPushToTalk, isPushToTalkPressed]);
+  }, [isPushToTalk, isPushToTalkPressed, isMuted]);
 
   // Handle PTT toggle on/off
   useEffect(() => {
     if (isPushToTalk) {
       // PTT just enabled, mute mic initially
       peerManager.setMuted(true);
+      // Disable Live Captions completely when PTT is enabled
+      setIsTranscriptionMuted(true);
     } else {
       // PTT disabled, restore normal mute state
       peerManager.setMuted(isMuted);
+      // Also restore Live Captions mute state
+      setIsTranscriptionMuted(isMuted);
     }
-  }, [isPushToTalk]);
+  }, [isPushToTalk, isMuted]);
+
+  // Handle transcription mute state changes
+  useEffect(() => {
+    if (isTranscribing && isTranscriptionMuted) {
+      // Stop transcription when muted
+      console.log('🎤 Stopping transcription due to mute state');
+      transcriptionService.stopTranscription();
+      setIsTranscribing(false);
+    } else if (!isTranscribing && !isTranscriptionMuted && stream && roomData?.settings?.transcription !== false) {
+      // Start transcription when unmuted and not already transcribing
+      console.log('🎤 Starting transcription due to unmute state');
+      const userName = (roomData as any).displayName || 'You';
+      transcriptionService.startTranscription(roomData.id, userName, stream)
+        .then(() => {
+          setIsTranscribing(true);
+          console.log('✅ Transcription started successfully');
+        })
+        .catch((error) => {
+          console.warn('⚠️ Failed to start transcription:', error);
+        });
+    }
+  }, [isTranscriptionMuted, isTranscribing, stream, roomData]);
 
   useEffect(() => {
     // Initialize WebRTC connection AND Web Speech API
@@ -152,8 +185,8 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
             console.log('✅ Transcription microphone access granted');
             announce('Microphone access granted for Web Speech API transcription');
             
-            // Start Live Captions only if transcription is enabled in room settings
-            if (roomData.settings?.transcription !== false) {
+            // Start Live Captions only if transcription is enabled in room settings and not muted
+            if (roomData.settings?.transcription !== false && !isTranscriptionMuted) {
               try {
                 console.log('🎤 Starting Live Captions by Gemini...');
                 const userName = (roomData as any).displayName || 'You';
@@ -165,9 +198,11 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
                 console.warn('⚠️ Failed to start Live Captions:', transcriptionError);
                 // Don't throw error, just log it - the connection should still work
               }
-            } else {
+            } else if (roomData.settings?.transcription === false) {
               console.log('🎤 Live Captions disabled for this room');
               announce('Live captions disabled for this room');
+            } else {
+              console.log('🎤 Live Captions muted initially');
             }
           } catch (error) {
             console.warn('⚠️ Web Speech API microphone access denied, continuing without transcription');
@@ -380,6 +415,9 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
     const newMutedState = !isMuted;
     setIsMuted(newMutedState);
     
+    // Update Live Captions mute state to match microphone mute state
+    setIsTranscriptionMuted(newMutedState);
+    
     // Update peer manager
     peerManager.setMuted(newMutedState);
     
@@ -517,9 +555,13 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
                   </Badge>
                 )}
                 {isTranscribing && roomData.settings?.transcription !== false && (
-                  <Badge className="bg-green-100 text-green-800 text-xs" aria-label="Live captions are active">
+                  <Badge className={`text-xs ${
+                    isTranscriptionMuted 
+                      ? 'bg-yellow-100 text-yellow-800' 
+                      : 'bg-green-100 text-green-800'
+                  }`} aria-label={isTranscriptionMuted ? 'Live captions are muted' : 'Live captions are active'}>
                     <MessageSquare className="h-2.5 w-2.5 mr-1" aria-hidden="true" />
-                    Live Captions
+                    {isTranscriptionMuted ? 'Captions Muted' : 'Live Captions'}
                   </Badge>
                 )}
               </div>
@@ -620,6 +662,9 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
                   userName="You"
                   stream={stream}
                   isTranscribing={isTranscribing}
+                  isMuted={isTranscriptionMuted}
+                  isPushToTalk={isPushToTalk}
+                  isPushToTalkPressed={isPushToTalkPressed}
                 />
               </div>
             </div>
