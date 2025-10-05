@@ -3,7 +3,6 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { AudioControls } from './AudioControls';
-import { ParticipantsList } from './ParticipantsList';
 import { TranscriptionPanel } from './TranscriptionPanel';
 import { StatusAnnouncer, useStatusAnnouncer } from './StatusAnnouncer';
 import { QRCodeDisplay } from './QRCodeDisplay';
@@ -37,7 +36,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   const [isPushToTalk, setIsPushToTalk] = useState(roomData.settings?.pushToTalk || false);
   const [isPushToTalkPressed, setIsPushToTalkPressed] = useState(false);
   const [showTranscription, setShowTranscription] = useState(false);
-  const [activeTab, setActiveTab] = useState<'audio' | 'participants' | 'captions'>('audio');
+  const [activeTab, setActiveTab] = useState<'audio' | 'captions'>('audio');
   const [showQRCode, setShowQRCode] = useState(false);
   
   // Web Speech API state for transcription
@@ -652,28 +651,80 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
                 onPushToTalkPress={handlePushToTalkPress}
               />
             </div>
-          </div>
-        )}
 
-        {activeTab === 'participants' && (
-          <div 
-            className="p-4 h-full overflow-y-auto"
-            role="tabpanel"
-            id="participants-panel"
-            aria-labelledby="participants-tab"
-          >
+            {/* Discord-style Participants Display */}
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
               <div className="mb-4">
-                <h2 className="font-semibold" id="participants-heading">
-                  Participants ({participants.length})
-                </h2>
-              </div>
-              <div role="list" aria-labelledby="participants-heading">
-                <ParticipantsList participants={participants} />
+                <h3 className="font-semibold text-sm text-gray-700 mb-3">Participants ({participants.length})</h3>
+                <div className="flex flex-wrap gap-4 sm:gap-6">
+                  {participants.map((participant) => {
+                    const isCurrentUser = participant.id === authService.getCurrentUserId();
+                    const isSpeaking = !participant.isMuted && participant.isSpeaking;
+                    
+                    return (
+                      <div
+                        key={participant.id}
+                        className={`relative flex flex-col items-center space-y-2 p-3 rounded-xl transition-all duration-200 ${
+                          isSpeaking 
+                            ? 'bg-green-50 border-2 border-green-300 shadow-md' 
+                            : 'bg-gray-50 border border-gray-200'
+                        }`}
+                      >
+                        {/* Avatar */}
+                        <div className="relative">
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg ${
+                            isCurrentUser ? 'bg-blue-500' : 'bg-purple-500'
+                          }`}>
+                            {participant.name.charAt(0).toUpperCase()}
+                          </div>
+                          
+                          {/* Speaking indicator */}
+                          {isSpeaking && (
+                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse">
+                              <div className="w-full h-full bg-green-400 rounded-full animate-ping"></div>
+                            </div>
+                          )}
+                          
+                          {/* Muted indicator */}
+                          {participant.isMuted && (
+                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
+                              <MicOff className="h-2 w-2 text-white" />
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Name */}
+                        <div className="text-center">
+                          <p className="text-xs font-medium text-gray-700 truncate max-w-20">
+                            {participant.name}
+                          </p>
+                        </div>
+                        
+                        {/* Speaking animation */}
+                        {isSpeaking && (
+                          <div className="flex space-x-1">
+                            <div className="w-1 h-3 bg-green-400 rounded-full animate-bounce"></div>
+                            <div className="w-1 h-2 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                            <div className="w-1 h-3 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Empty state */}
+                  {participants.length === 0 && (
+                    <div className="text-center text-gray-500 py-8 w-full">
+                      <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Waiting for others to join...</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         )}
+
 
         {activeTab === 'captions' && roomData.settings?.transcription !== false && (
           <div 
@@ -746,27 +797,6 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
             <span className="text-xs font-medium">Audio</span>
           </button>
           
-          <button
-            onClick={() => setActiveTab('participants')}
-            className={`flex flex-col items-center space-y-1 py-2 px-3 rounded-xl transition-colors relative focus-ring touch-target ${
-              activeTab === 'participants' ? 'text-blue-600 bg-blue-50' : 'text-gray-500'
-            }`}
-            role="tab"
-            aria-selected={activeTab === 'participants'}
-            aria-controls="participants-panel"
-            id="participants-tab"
-            aria-describedby="participant-count"
-          >
-            <Users className="h-5 w-5" aria-hidden="true" />
-            <span className="text-xs font-medium">People</span>
-            <div 
-              className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
-              id="participant-count"
-              aria-label={`${participants.length} participants`}
-            >
-              {participants.length}
-            </div>
-          </button>
           
           {roomData.settings?.transcription !== false && (
             <button
