@@ -7,6 +7,7 @@ import { ParticipantsList } from './ParticipantsList';
 import { TranscriptionPanel } from './TranscriptionPanel';
 import { StatusAnnouncer, useStatusAnnouncer } from './StatusAnnouncer';
 import { QRCodeDisplay } from './QRCodeDisplay';
+import { transcriptionService } from '../services/transcriptionService';
 import { 
   Volume2, 
   VolumeX, 
@@ -46,6 +47,9 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
   // WebRTC state for real participants
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  
+  // Transcription state
+  const [isTranscribing, setIsTranscribing] = useState(false);
   
   // Refs to store unsubscribe functions
   const unsubscribeParticipantsRef = useRef<(() => void) | null>(null);
@@ -133,7 +137,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         console.log('🎤 Step 1: Initializing local media stream...');
         await peerManager.initializeLocalStream();
         
-        // STEP 2: Set up Web Speech API microphone access
+        // STEP 2: Set up Web Speech API microphone access and start Live Captions
         const setupTranscriptionMicrophone = async () => {
           try {
             console.log('🎤 Step 2: Setting up transcription microphone...');
@@ -147,6 +151,24 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
             setStream(mediaStream);
             console.log('✅ Transcription microphone access granted');
             announce('Microphone access granted for Web Speech API transcription');
+            
+            // Start Live Captions only if transcription is enabled in room settings
+            if (roomData.settings?.transcription !== false) {
+              try {
+                console.log('🎤 Starting Live Captions by Gemini...');
+                const userName = (roomData as any).displayName || 'You';
+                await transcriptionService.startTranscription(roomData.id, userName, mediaStream);
+                setIsTranscribing(true);
+                console.log('✅ Live Captions started successfully');
+                announce('Live captions enabled');
+              } catch (transcriptionError) {
+                console.warn('⚠️ Failed to start Live Captions:', transcriptionError);
+                // Don't throw error, just log it - the connection should still work
+              }
+            } else {
+              console.log('🎤 Live Captions disabled for this room');
+              announce('Live captions disabled for this room');
+            }
           } catch (error) {
             console.warn('⚠️ Web Speech API microphone access denied, continuing without transcription');
             announce('Microphone access denied for transcription features');
@@ -325,6 +347,13 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
               track.enabled = false;
             });
           }
+          
+          // Cleanup transcription service
+          if (isTranscribing) {
+            console.log('🎤 Stopping Live Captions (unmount)');
+            transcriptionService.stopTranscription();
+            setIsTranscribing(false);
+          }
         };
       } catch (error) {
         announce('Failed to connect to audio bubble');
@@ -420,6 +449,13 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
         setStream(null);
       }
       
+      // Cleanup transcription service
+      if (isTranscribing) {
+        console.log('🎤 Stopping Live Captions');
+        transcriptionService.stopTranscription();
+        setIsTranscribing(false);
+      }
+      
       // Leave room in Firebase
       console.log('🚪 Leaving room in Firebase');
       await signaling.leaveRoom();
@@ -478,6 +514,12 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
                   <Badge className="bg-yellow-100 text-yellow-800 text-xs" aria-label="You are the host">
                     <Crown className="h-2.5 w-2.5 mr-1" aria-hidden="true" />
                     Host
+                  </Badge>
+                )}
+                {isTranscribing && roomData.settings?.transcription !== false && (
+                  <Badge className="bg-green-100 text-green-800 text-xs" aria-label="Live captions are active">
+                    <MessageSquare className="h-2.5 w-2.5 mr-1" aria-hidden="true" />
+                    Live Captions
                   </Badge>
                 )}
               </div>
@@ -559,7 +601,7 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
           </div>
         )}
 
-        {activeTab === 'captions' && (
+        {activeTab === 'captions' && roomData.settings?.transcription !== false && (
           <div 
             className="p-4 h-full overflow-y-auto"
             role="tabpanel"
@@ -577,7 +619,25 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
                   userId={authService.getCurrentUserId() || 'unknown'}
                   userName="You"
                   stream={stream}
+                  isTranscribing={isTranscribing}
                 />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'captions' && roomData.settings?.transcription === false && (
+          <div 
+            className="p-4 h-full overflow-y-auto"
+            role="tabpanel"
+            id="captions-panel"
+            aria-labelledby="captions-tab"
+          >
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 h-full flex items-center justify-center">
+              <div className="text-center space-y-3">
+                <MessageSquare className="h-12 w-12 text-gray-400 mx-auto" />
+                <h3 className="text-lg font-semibold text-gray-700">Live Captions Disabled</h3>
+                <p className="text-sm text-gray-500">Live captions were disabled when this room was created.</p>
               </div>
             </div>
           </div>
@@ -627,19 +687,21 @@ export function AudioBubble({ roomData, onLeave }: AudioBubbleProps) {
             </div>
           </button>
           
-          <button
-            onClick={() => setActiveTab('captions')}
-            className={`flex flex-col items-center space-y-1 py-2 px-3 rounded-xl transition-colors focus-ring touch-target ${
-              activeTab === 'captions' ? 'text-blue-600 bg-blue-50' : 'text-gray-500'
-            }`}
-            role="tab"
-            aria-selected={activeTab === 'captions'}
-            aria-controls="captions-panel"
-            id="captions-tab"
-          >
-            <MessageSquare className="h-5 w-5" aria-hidden="true" />
-            <span className="text-xs font-medium">Captions</span>
-          </button>
+          {roomData.settings?.transcription !== false && (
+            <button
+              onClick={() => setActiveTab('captions')}
+              className={`flex flex-col items-center space-y-1 py-2 px-3 rounded-xl transition-colors focus-ring touch-target ${
+                activeTab === 'captions' ? 'text-blue-600 bg-blue-50' : 'text-gray-500'
+              }`}
+              role="tab"
+              aria-selected={activeTab === 'captions'}
+              aria-controls="captions-panel"
+              id="captions-tab"
+            >
+              <MessageSquare className="h-5 w-5" aria-hidden="true" />
+              <span className="text-xs font-medium">Captions</span>
+            </button>
+          )}
 
           {/* Quick Mute Button */}
           <button
