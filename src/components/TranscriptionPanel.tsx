@@ -13,38 +13,18 @@ interface TranscriptionPanelProps {
   userId: string;
   userName: string;
   stream: MediaStream | null;
+  isTranscribing?: boolean;
 }
 
-export function TranscriptionPanel({ roomId, roomName, userId, userName, stream }: TranscriptionPanelProps) {
+export function TranscriptionPanel({ roomId, roomName, userId, userName, stream, isTranscribing: externalIsTranscribing }: TranscriptionPanelProps) {
   const [transcriptions, setTranscriptions] = useState<TranscriptionEntry[]>([]);
-  const [isTranscribing, setIsTranscribing] = useState(false);
   const [currentSpeakers, setCurrentSpeakers] = useState<Set<string>>(new Set());
   const [summary, setSummary] = useState<RoomSummary | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Start transcription when stream is available
-  useEffect(() => {
-    if (!stream || isTranscribing) return;
-
-    const startTranscription = async () => {
-      try {
-        await transcriptionService.startTranscription(roomId, userName, stream);
-        setIsTranscribing(true);
-        toast.success('Live transcription started');
-      } catch (error) {
-        console.error('Failed to start transcription:', error);
-        toast.error('Failed to start transcription');
-      }
-    };
-
-    startTranscription();
-
-    return () => {
-      transcriptionService.stopTranscription();
-      setIsTranscribing(false);
-    };
-  }, [stream, roomId, userName]);
+  // Use external transcription state
+  const isTranscribing = externalIsTranscribing || false;
 
   // Listen to transcriptions from all participants (real-time sync)
   useEffect(() => {
